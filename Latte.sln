@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Latte", "Latte\Latte.csproj", "{950D3D61-FA44-495E-8ED3-A4E9378D9430}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LatteTests", "LatteTests\LatteTests.csproj", "{48907750-E985-4D7B-8A1D-88025A427E41}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{950D3D61-FA44-495E-8ED3-A4E9378D9430}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{950D3D61-FA44-495E-8ED3-A4E9378D9430}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{950D3D61-FA44-495E-8ED3-A4E9378D9430}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{950D3D61-FA44-495E-8ED3-A4E9378D9430}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48907750-E985-4D7B-8A1D-88025A427E41}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48907750-E985-4D7B-8A1D-88025A427E41}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48907750-E985-4D7B-8A1D-88025A427E41}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48907750-E985-4D7B-8A1D-88025A427E41}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
