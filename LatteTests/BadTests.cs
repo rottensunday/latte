@@ -16,7 +16,3 @@ public class BadTests
         Assert.IsTrue(result.ParsingResultType != ParsingResultType.Ok || !result.CompilationResult.Success);
     }
 }
-
-
-
-

@@ -8,7 +8,3 @@ public enum LatteType
     String,
     Boolean
 }
-
-
-
-

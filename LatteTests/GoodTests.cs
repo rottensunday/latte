@@ -17,7 +17,3 @@ public class GoodTests
         Assert.IsTrue(result.CompilationResult.Success);
     }
 }
-
-
-
-

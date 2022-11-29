@@ -6,7 +6,3 @@ public class VariableSymbol : Symbol
     {
     }
 }
-
-
-
-

@@ -16,7 +16,3 @@ public static class TypesHelper
         };
     }
 }
-
-
-
-

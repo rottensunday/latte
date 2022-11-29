@@ -66,10 +66,11 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
         {
             if (!CodeReturns(context.block()))
             {
-                _errors.Add(new CompilationError(
-                    CompilationErrorType.FunctionDoesntReturn,
-                    context.block().Start,
-                    context.ID().GetText()));
+                _errors.Add(
+                    new CompilationError(
+                        CompilationErrorType.FunctionDoesntReturn,
+                        context.block().Start,
+                        context.ID().GetText()));
             }
         }
 
@@ -141,13 +142,14 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
 
             var exprType = _types.Get(expr);
             var rvalueType = TypesHelper.TryGetLatteType(context.type_().GetText());
-                
+
             if (exprType != rvalueType)
             {
-                _errors.Add(new CompilationError(
-                    CompilationErrorType.TypeMismatch,
-                    expr.Start,
-                    $"Expected {exprType} in declaration, found {rvalueType}"));
+                _errors.Add(
+                    new CompilationError(
+                        CompilationErrorType.TypeMismatch,
+                        expr.Start,
+                        $"Expected {exprType} in declaration, found {rvalueType}"));
             }
         }
 
@@ -624,12 +626,7 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
         var stmt = context.stmt();
         var value = _constantExpressions.Get(context.expr());
 
-        if (value is not ConstExpression<bool> { Value: true })
-        {
-            return false;
-        }
-
-        return CodeReturns(stmt);
+        return value is ConstExpression<bool> { Value: true } && CodeReturns(stmt);
     }
 
     private bool CodeReturns(LatteParser.CondElseContext context)
@@ -654,7 +651,7 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
                 return true;
             }
         }
-            
+
         return CodeReturns(ifStmt) && CodeReturns(elseStmt);
     }
 
@@ -663,118 +660,23 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
         var whileValue = _constantExpressions.Get(context.expr());
         var stmt = context.stmt();
 
-        if (whileValue is not ConstExpression<bool> { Value: true })
-        {
-            return false;
-        }
-
-        return CodeReturns(stmt);
+        return whileValue is ConstExpression<bool> { Value: true } && CodeReturns(stmt);
     }
 
     private bool CodeReturns(LatteParser.BlockContext context)
     {
         var stmts = context.stmt();
 
-        if (stmts.Any(x => x is LatteParser.RetContext or LatteParser.VRetContext))
-        {
-            return true;
-        }
-
-        if (stmts.OfType<LatteParser.BlockStmtContext>().Any(x => CodeReturns(x.block())))
-        {
-            return true;
-        }
-
-        foreach (var ifStmt in stmts.OfType<LatteParser.CondContext>())
-        {
-            // var stmt = ifStmt.stmt();
-            // var value = _constantExpressions.Get(ifStmt.expr());
-            //
-            // if (value is not ConstExpression<bool> { Value: true })
-            // {
-            //     continue;
-            // }
-            //
-            // if (stmt is LatteParser.RetContext or LatteParser.VRetContext
-            //     || stmt is LatteParser.BlockStmtContext x && CodeReturns(x.block()))
-            // {
-            //     return true;
-            // }
-
-            if (CodeReturns(ifStmt))
-            {
-                return true;
-            }
-        }
-
-        foreach (var ifElseStmt in stmts.OfType<LatteParser.CondElseContext>())
-        {
-            // var ifStmt = ifElseStmt.stmt()[0];
-            // var elseStmt = ifElseStmt.stmt()[1];
-            //
-            // var ifValue = _constantExpressions.Get(ifElseStmt.expr());
-            //
-            // if (ifValue is ConstExpression<bool> { Value: true })
-            // {
-            //     if (ifStmt is LatteParser.RetContext or LatteParser.VRetContext
-            //         || ifStmt is LatteParser.BlockStmtContext x1 && CodeReturns(x1.block()))
-            //     {
-            //         return true;
-            //     }
-            // }
-            //
-            // if (ifValue is ConstExpression<bool> { Value: false })
-            // {
-            //     if (elseStmt is LatteParser.RetContext or LatteParser.VRetContext
-            //         || elseStmt is LatteParser.BlockStmtContext x2 && CodeReturns(x2.block()))
-            //     {
-            //         return true;
-            //     }
-            // }
-            //
-            // if (
-            //     (ifStmt is LatteParser.RetContext or LatteParser.VRetContext 
-            //      || ifStmt is LatteParser.BlockStmtContext x3 && CodeReturns(x3.block())) 
-            //     &&
-            //     (elseStmt is LatteParser.RetContext or LatteParser.VRetContext
-            //      || elseStmt is LatteParser.BlockStmtContext x4 && CodeReturns(x4.block())))
-            // {
-            //     return true;
-            // }
-
-            if (CodeReturns(ifElseStmt))
-            {
-                return true;
-            }
-        }
-
-        foreach (var whileStmt in stmts.OfType<LatteParser.WhileContext>())
-        {
-            // var whileValue = _constantExpressions.Get(whileStmt.expr());
-            // var stmt = whileStmt.stmt();
-            //
-            // if (whileValue is not ConstExpression<bool> { Value: true })
-            // {
-            //     continue;
-            // }
-            //
-            // if (stmt is LatteParser.RetContext or LatteParser.VRetContext
-            //     || stmt is LatteParser.BlockStmtContext x && CodeReturns(x.block()))
-            // {
-            //     return true;
-            // }
-
-            if (CodeReturns(whileStmt))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return stmts.Any(x => x is LatteParser.RetContext or LatteParser.VRetContext) ||
+               stmts.OfType<LatteParser.BlockStmtContext>().Any(x => CodeReturns(x.block())) ||
+               stmts.OfType<LatteParser.CondContext>().Any(CodeReturns) ||
+               stmts.OfType<LatteParser.CondElseContext>().Any(CodeReturns) ||
+               stmts.OfType<LatteParser.WhileContext>().Any(CodeReturns);
     }
 
     private bool CodeReturns(ITree context)
-        => context switch
+    {
+        return context switch
         {
             LatteParser.RetContext => true,
             LatteParser.VRetContext => true,
@@ -783,6 +685,7 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
             LatteParser.CondElseContext x => CodeReturns(x),
             LatteParser.WhileContext x => CodeReturns(x)
         };
+    }
 
     protected override CompilationResult AggregateResult(CompilationResult aggregate, CompilationResult nextResult)
     {
@@ -806,7 +709,3 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
         return new CompilationResult(errors);
     }
 }
-
-
-
-

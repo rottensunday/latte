@@ -45,7 +45,3 @@ public static class LatteCompiler
         return new CompileResult(ParsingResultType.SyntaxError);
     }
 }
-
-
-
-

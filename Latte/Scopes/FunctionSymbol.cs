@@ -67,7 +67,3 @@ public class FunctionSymbol : Symbol, IScope
         return $"function {base.ToString()} : {string.Join(", ", Arguments.Values)}";
     }
 }
-
-
-
-

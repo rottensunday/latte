@@ -14,7 +14,3 @@ public interface IScope
 
     FunctionSymbol GetEnclosingFunction();
 }
-
-
-
-

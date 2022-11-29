@@ -5,7 +5,3 @@ public enum ParsingResultType
     Ok,
     SyntaxError
 }
-
-
-
-

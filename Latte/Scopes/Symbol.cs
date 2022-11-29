@@ -24,7 +24,3 @@ public class Symbol
         return LatteType != LatteType.Invalid ? $"[{Name}: {LatteType}]" : $"[{Name}]";
     }
 }
-
-
-
-

@@ -6,6 +6,3 @@ public enum MulOpType
     Divide,
     Modulo
 }
-
-
-

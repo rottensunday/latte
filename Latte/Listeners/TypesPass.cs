@@ -182,6 +182,3 @@ public class TypesPass : LatteBaseListener
         }
     }
 }
-
-
-

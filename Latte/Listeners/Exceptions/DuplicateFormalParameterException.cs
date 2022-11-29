@@ -12,4 +12,3 @@ public class DuplicateFormalParameterException : Exception
 
     public int Column { get; set; }
 }
-

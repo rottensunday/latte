@@ -11,7 +11,3 @@ public enum CompilationErrorType
     VariableAlreadyDeclared,
     FunctionDoesntReturn
 }
-
-
-
-

@@ -61,7 +61,3 @@ public abstract class BaseScope : IScope
         return $"{GetScopeName()} : {string.Join(", ", _symbols.Keys)}";
     }
 }
-
-
-
-

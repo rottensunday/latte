@@ -138,7 +138,3 @@ public class SymbolTablePass : LatteBaseListener
         Scopes.Put(ctx, scope);
     }
 }
-
-
-
-

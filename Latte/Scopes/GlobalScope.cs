@@ -11,7 +11,3 @@ public class GlobalScope : BaseScope
         return "globals";
     }
 }
-
-
-
-

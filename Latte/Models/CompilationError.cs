@@ -28,7 +28,3 @@ public class CompilationError
 
     public int Column { get; set; }
 }
-
-
-
-

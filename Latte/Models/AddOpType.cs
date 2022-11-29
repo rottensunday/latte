@@ -5,6 +5,3 @@ public enum AddOpType
     Plus,
     Minus
 }
-
-
-

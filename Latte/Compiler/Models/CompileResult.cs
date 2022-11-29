@@ -14,7 +14,3 @@ public class CompileResult
 
     public CompilationResult CompilationResult { get; set; }
 }
-
-
-
-

@@ -9,6 +9,3 @@ public enum RelOpType
     Equal,
     NotEqual
 }
-
-
-

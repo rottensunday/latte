@@ -45,6 +45,3 @@ public static class OperationsExtensions
         };
     }
 }
-
-
-

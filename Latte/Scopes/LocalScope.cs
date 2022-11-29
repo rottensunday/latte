@@ -11,7 +11,3 @@ public class LocalScope : BaseScope
         return "locals";
     }
 }
-
-
-
-
