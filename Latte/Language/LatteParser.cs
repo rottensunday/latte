@@ -1000,29 +1000,57 @@ public partial class LatteParser : Parser {
 	}
 
 	public partial class ItemContext : ParserRuleContext {
-		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
-		[System.Diagnostics.DebuggerNonUserCode] public ExprContext expr() {
-			return GetRuleContext<ExprContext>(0);
-		}
 		public ItemContext(ParserRuleContext parent, int invokingState)
 			: base(parent, invokingState)
 		{
 		}
 		public override int RuleIndex { get { return RULE_item; } }
+	 
+		public ItemContext() { }
+		public virtual void CopyFrom(ItemContext context) {
+			base.CopyFrom(context);
+		}
+	}
+	public partial class SimpleDeclContext : ItemContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		public SimpleDeclContext(ItemContext context) { CopyFrom(context); }
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override void EnterRule(IParseTreeListener listener) {
 			ILatteListener typedListener = listener as ILatteListener;
-			if (typedListener != null) typedListener.EnterItem(this);
+			if (typedListener != null) typedListener.EnterSimpleDecl(this);
 		}
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override void ExitRule(IParseTreeListener listener) {
 			ILatteListener typedListener = listener as ILatteListener;
-			if (typedListener != null) typedListener.ExitItem(this);
+			if (typedListener != null) typedListener.ExitSimpleDecl(this);
 		}
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
 			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
-			if (typedVisitor != null) return typedVisitor.VisitItem(this);
+			if (typedVisitor != null) return typedVisitor.VisitSimpleDecl(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
+	public partial class AssDeclContext : ItemContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public ExprContext expr() {
+			return GetRuleContext<ExprContext>(0);
+		}
+		public AssDeclContext(ItemContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterAssDecl(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitAssDecl(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitAssDecl(this);
 			else return visitor.VisitChildren(this);
 		}
 	}
@@ -1036,6 +1064,7 @@ public partial class LatteParser : Parser {
 			ErrorHandler.Sync(this);
 			switch ( Interpreter.AdaptivePredict(TokenStream,7,Context) ) {
 			case 1:
+				_localctx = new SimpleDeclContext(_localctx);
 				EnterOuterAlt(_localctx, 1);
 				{
 				State = 117;
@@ -1043,6 +1072,7 @@ public partial class LatteParser : Parser {
 				}
 				break;
 			case 2:
+				_localctx = new AssDeclContext(_localctx);
 				EnterOuterAlt(_localctx, 2);
 				{
 				State = 118;

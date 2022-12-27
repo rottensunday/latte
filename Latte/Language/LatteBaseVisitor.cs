@@ -251,7 +251,8 @@ public partial class LatteBaseVisitor<Result> : AbstractParseTreeVisitor<Result>
 	/// <return>The visitor result.</return>
 	public virtual Result VisitVoid([NotNull] LatteParser.VoidContext context) { return VisitChildren(context); }
 	/// <summary>
-	/// Visit a parse tree produced by <see cref="LatteParser.item"/>.
+	/// Visit a parse tree produced by the <c>SimpleDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
 	/// <para>
 	/// The default implementation returns the result of calling <see cref="AbstractParseTreeVisitor{Result}.VisitChildren(IRuleNode)"/>
 	/// on <paramref name="context"/>.
@@ -259,7 +260,18 @@ public partial class LatteBaseVisitor<Result> : AbstractParseTreeVisitor<Result>
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
-	public virtual Result VisitItem([NotNull] LatteParser.ItemContext context) { return VisitChildren(context); }
+	public virtual Result VisitSimpleDecl([NotNull] LatteParser.SimpleDeclContext context) { return VisitChildren(context); }
+	/// <summary>
+	/// Visit a parse tree produced by the <c>AssDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
+	/// <para>
+	/// The default implementation returns the result of calling <see cref="AbstractParseTreeVisitor{Result}.VisitChildren(IRuleNode)"/>
+	/// on <paramref name="context"/>.
+	/// </para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	public virtual Result VisitAssDecl([NotNull] LatteParser.AssDeclContext context) { return VisitChildren(context); }
 	/// <summary>
 	/// Visit a parse tree produced by the <c>EId</c>
 	/// labeled alternative in <see cref="LatteParser.expr"/>.

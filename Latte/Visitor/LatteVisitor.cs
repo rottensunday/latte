@@ -133,7 +133,12 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
     {
         foreach (var x in context.item())
         {
-            var expr = x.expr();
+            if (x is not LatteParser.AssDeclContext rhs)
+            {
+                continue;
+            }
+
+            var expr = rhs.expr();
 
             if (expr == null)
             {
@@ -148,7 +153,7 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
                 _errors.Add(
                     new CompilationError(
                         CompilationErrorType.TypeMismatch,
-                        expr.Start,
+                        x.Start,
                         $"Expected {exprType} in declaration, found {rvalueType}"));
             }
         }
@@ -278,7 +283,12 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
                 break;
         }
 
-        var symbolArgs = (symbol as FunctionSymbol).ArgumentsList;
+        if (symbol is not FunctionSymbol functionSymbol)
+        {
+            return VisitChildren(context);
+        }
+
+        var symbolArgs = functionSymbol.ArgumentsList;
 
         if (symbolArgs.Count != args.Length)
         {

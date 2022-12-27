@@ -308,17 +308,33 @@ public partial class LatteBaseListener : ILatteListener {
 	/// <param name="context">The parse tree.</param>
 	public virtual void ExitVoid([NotNull] LatteParser.VoidContext context) { }
 	/// <summary>
-	/// Enter a parse tree produced by <see cref="LatteParser.item"/>.
+	/// Enter a parse tree produced by the <c>SimpleDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
 	/// <para>The default implementation does nothing.</para>
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	public virtual void EnterItem([NotNull] LatteParser.ItemContext context) { }
+	public virtual void EnterSimpleDecl([NotNull] LatteParser.SimpleDeclContext context) { }
 	/// <summary>
-	/// Exit a parse tree produced by <see cref="LatteParser.item"/>.
+	/// Exit a parse tree produced by the <c>SimpleDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
 	/// <para>The default implementation does nothing.</para>
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	public virtual void ExitItem([NotNull] LatteParser.ItemContext context) { }
+	public virtual void ExitSimpleDecl([NotNull] LatteParser.SimpleDeclContext context) { }
+	/// <summary>
+	/// Enter a parse tree produced by the <c>AssDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void EnterAssDecl([NotNull] LatteParser.AssDeclContext context) { }
+	/// <summary>
+	/// Exit a parse tree produced by the <c>AssDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
+	/// <para>The default implementation does nothing.</para>
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	public virtual void ExitAssDecl([NotNull] LatteParser.AssDeclContext context) { }
 	/// <summary>
 	/// Enter a parse tree produced by the <c>EId</c>
 	/// labeled alternative in <see cref="LatteParser.expr"/>.

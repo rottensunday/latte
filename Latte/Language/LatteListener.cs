@@ -263,15 +263,29 @@ public interface ILatteListener : IParseTreeListener {
 	/// <param name="context">The parse tree.</param>
 	void ExitVoid([NotNull] LatteParser.VoidContext context);
 	/// <summary>
-	/// Enter a parse tree produced by <see cref="LatteParser.item"/>.
+	/// Enter a parse tree produced by the <c>SimpleDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	void EnterItem([NotNull] LatteParser.ItemContext context);
+	void EnterSimpleDecl([NotNull] LatteParser.SimpleDeclContext context);
 	/// <summary>
-	/// Exit a parse tree produced by <see cref="LatteParser.item"/>.
+	/// Exit a parse tree produced by the <c>SimpleDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
-	void ExitItem([NotNull] LatteParser.ItemContext context);
+	void ExitSimpleDecl([NotNull] LatteParser.SimpleDeclContext context);
+	/// <summary>
+	/// Enter a parse tree produced by the <c>AssDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void EnterAssDecl([NotNull] LatteParser.AssDeclContext context);
+	/// <summary>
+	/// Exit a parse tree produced by the <c>AssDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	void ExitAssDecl([NotNull] LatteParser.AssDeclContext context);
 	/// <summary>
 	/// Enter a parse tree produced by the <c>EId</c>
 	/// labeled alternative in <see cref="LatteParser.expr"/>.

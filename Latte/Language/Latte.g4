@@ -39,8 +39,8 @@ type_
     ;
 
 item
-    : ID
-    | ID '=' expr
+    : ID                                # SimpleDecl
+    | ID '=' expr                       # AssDecl
     ;
 
 expr

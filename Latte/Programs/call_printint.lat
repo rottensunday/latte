@@ -1,0 +1,5 @@
+int main() {
+    printInt(17);
+    
+    return 0;
+}

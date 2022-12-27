@@ -1,24 +1,14 @@
 ﻿using Latte.Compiler;
 
-Console.WriteLine("go...");
-
-// var input = new AntlrFileStream("Programs/program.lat");
-// var lexer = new LatteLexer(input);
-// var tokens = new CommonTokenStream(lexer);
-// var parser = new LatteParser(tokens);
-// var tree = parser.program();
-// var walker = new ParseTreeWalker();
-// var symbolTablePass = new SymbolTablePass();
-// walker.Walk(symbolTablePass, tree);
-//
-// var typesPass = new TypesPass(symbolTablePass.Globals, symbolTablePass.Scopes);
-// walker.Walk(typesPass, tree);
-//
-// var testVisitor = new LatteVisitor(symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types);
-// var result = testVisitor.VisitProgram(tree);
-// result.WriteErrors();
-
 var result = LatteCompiler.Compile("Programs/program.lat");
+Console.WriteLine();
 result.CompilationResult?.WriteErrors();
-
-var x = 1;
+Console.WriteLine();
+result.CompilationResult?.WriteInstructions();
+Console.WriteLine();
+result.CompilationResult?.WriteInstructionsToFile("/Users/rotten/Learn/Compilers/latte/Latte/Latte/Programs/call_printint.s");
+Console.WriteLine();
+result.CompilationResult?.WriteOutputToFile("/Users/rotten/Learn/Compilers/latte/Latte/Latte/Programs/call_printint.output");
+Console.WriteLine();
+Console.WriteLine("Code run result:");
+result.CompilationResult?.WriteOutput();

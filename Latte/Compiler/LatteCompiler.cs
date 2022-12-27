@@ -33,12 +33,58 @@ public static class LatteCompiler
             var constantsPass = new InlinePass(symbolTablePass.Globals, symbolTablePass.Scopes);
             walker.Walk(constantsPass, tree);
 
+            var intermediatePass = new IntermediateBuilderPass(
+                symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types, constantsPass.ConstantExpressions);
+            walker.Walk(intermediatePass, tree);
+
+            // var intermediatePass = new IntermediateBuilderPassVisitor(
+            //     symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types, constantsPass.ConstantExpressions);
+            // intermediatePass.VisitProgram(tree);
+            
+            Console.WriteLine("INTERMEDIATE REPRESENTATION:");
+            Console.WriteLine("-----------------------------");
+
+            foreach (var function in intermediatePass.IntermediateFunctions)
+            {
+                Console.WriteLine($"{function.Name}:");
+
+                foreach (var instruction in function.Instructions)
+                {
+                    Console.WriteLine(instruction);
+                }
+                
+                Console.WriteLine();
+            }
+            
+            Console.WriteLine("-----------------------------");
+
             var testVisitor = new LatteVisitor(
                 symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types, constantsPass.ConstantExpressions);
             var result = testVisitor.VisitProgram(tree);
+            
             result.WriteErrors();
 
-            return new CompileResult(ParsingResultType.Ok, new CompilationResult(result.Errors));
+            if (!result.Success)
+            {
+                return new CompileResult(ParsingResultType.Ok, new CompilationResult(result.Errors));
+            }
+
+            // var generatingVisitor = new LatteVisitorGenerator(
+            //     symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types,
+            //     constantsPass.ConstantExpressions);
+            //
+            // generatingVisitor.VisitProgram(tree);
+
+            var instructions = new List<string>();
+            var compiler = new IntermediateToX86Compiler();
+            
+            instructions.Add(GasSymbols.Prefix);
+
+            instructions.AddRange(compiler.Compile(intermediatePass.IntermediateFunctions));
+            
+
+            return new CompileResult(
+                ParsingResultType.Ok, new CompilationResult(null, instructions));
         }
 
         Console.WriteLine("Syntax errors in code; unable to generate");

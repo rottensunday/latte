@@ -12,6 +12,7 @@ public class BadTests
     public void BadInputTest(string path)
     {
         var result = LatteCompiler.Compile(path);
+        result?.CompilationResult?.WriteErrors();
 
         Assert.IsTrue(result.ParsingResultType != ParsingResultType.Ok || !result.CompilationResult.Success);
     }

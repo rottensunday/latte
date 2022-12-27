@@ -168,11 +168,19 @@ public interface ILatteVisitor<Result> : IParseTreeVisitor<Result> {
 	/// <return>The visitor result.</return>
 	Result VisitVoid([NotNull] LatteParser.VoidContext context);
 	/// <summary>
-	/// Visit a parse tree produced by <see cref="LatteParser.item"/>.
+	/// Visit a parse tree produced by the <c>SimpleDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
 	/// </summary>
 	/// <param name="context">The parse tree.</param>
 	/// <return>The visitor result.</return>
-	Result VisitItem([NotNull] LatteParser.ItemContext context);
+	Result VisitSimpleDecl([NotNull] LatteParser.SimpleDeclContext context);
+	/// <summary>
+	/// Visit a parse tree produced by the <c>AssDecl</c>
+	/// labeled alternative in <see cref="LatteParser.item"/>.
+	/// </summary>
+	/// <param name="context">The parse tree.</param>
+	/// <return>The visitor result.</return>
+	Result VisitAssDecl([NotNull] LatteParser.AssDeclContext context);
 	/// <summary>
 	/// Visit a parse tree produced by the <c>EId</c>
 	/// labeled alternative in <see cref="LatteParser.expr"/>.

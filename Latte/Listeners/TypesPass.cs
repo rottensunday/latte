@@ -162,6 +162,8 @@ public class TypesPass : LatteBaseListener
         if (symbol is null or VariableSymbol)
         {
             Types.Put(context, LatteType.Invalid);
+
+            return;
         }
 
         var type = symbol.LatteType;

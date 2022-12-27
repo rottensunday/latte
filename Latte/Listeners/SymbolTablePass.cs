@@ -110,7 +110,15 @@ public class SymbolTablePass : LatteBaseListener
     public override void ExitDecl(LatteParser.DeclContext context)
     {
         var type = TypesHelper.TryGetLatteType(context.type_().GetText());
-        foreach (var name in context.item().Select(x => x.ID().GetText()))
+        var itemIds = context.item().Select(
+            x => x switch
+            {
+                LatteParser.SimpleDeclContext simpleDeclContext => simpleDeclContext.ID().GetText(),
+                LatteParser.AssDeclContext assDeclContext => assDeclContext.ID().GetText(),
+                _ => null
+            });
+        
+        foreach (var name in itemIds)
         {
             DefineVar(name, type, context.Start);
         }
