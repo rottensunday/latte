@@ -34,7 +34,7 @@ public class IntermediateBuilderPassVisitor : LatteBaseVisitor<int>
 
         foreach (var kvp in arguments)
         {
-            _currentFunction.Variables.Add(_currentFunction.GetNextRegister(kvp.Key));
+            _currentFunction.Variables.Add(_currentFunction.GetNextRegister(kvp.Value.LatteType, kvp.Key));
         }
 
         VisitChildren(context);

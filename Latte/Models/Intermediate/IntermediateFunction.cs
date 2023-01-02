@@ -1,9 +1,10 @@
 namespace Latte.Models.Intermediate;
 
+using Scopes;
+
 public class IntermediateFunction
 {
     private int _currentRegister;
-    private int _currentLabel;
 
     public IntermediateFunction(string name)
     {
@@ -18,9 +19,8 @@ public class IntermediateFunction
     
     public string Name { get; set; }
     
-    public RegisterTerm GetNextRegister(string identifier = null, bool isParam = false) => new($"t{_currentRegister++}", identifier, isParam);
+    public RegisterTerm GetNextRegister(LatteType type, string identifier = null, bool isParam = false) => new($"t{_currentRegister++}", type, identifier, isParam);
 
-    public LabelIntermediateInstruction GetNextLabel() => new LabelIntermediateInstruction(new LabelTerm($"l{_currentLabel++}"));
     
     public bool TryGetVariable(string name, out RegisterTerm register)
     {

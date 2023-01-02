@@ -15,7 +15,30 @@ public enum Register
     RBP,
     RSP,
     R8,
-    R9
+    R9,
+    DIL,
+    SIL,
+    AL,
+    BL,
+    DL,
+    CL,
+    BPL,
+    SPL
+}
+
+public static class RegisterExtensions
+{
+    public static Register GetLowByte(this Register register)
+        => register switch
+        {
+            Register.RAX => Register.AL,
+            Register.RDI => Register.DIL,
+            Register.RSI => Register.SIL,
+            Register.RDX => Register.DL,
+            Register.RCX => Register.CL,
+            Register.RBP => Register.BPL,
+            Register.RSP => Register.SPL
+        };
 }
 
 public static class GasSymbols
@@ -40,6 +63,12 @@ public static class GasSymbols
 
     public static string GenerateMov(int value, Register to)
         => $"MOV {to}, {value}";
+    
+    public static string GenerateMovzx(int value, Register to)
+        => $"MOVZX {to}, {value}";
+
+    public static string GenerateMovzxFromOffset(int offset, Register to)
+        => $"MOVZX {to}, BYTE PTR [RBP{BuildOffsetString(offset)}]";
 
     public static string GenerateMovFromOffset(int offset, Register to) 
         => $"MOV {to}, [RBP{BuildOffsetString(offset)}]";
@@ -109,6 +138,24 @@ public static class GasSymbols
 
     public static string GenerateCmp(Register left, int right)
         => $"CMP {left}, {right}";
+
+    public static string GenerateSetEqualToOffset(int offset)
+        => $"SETE [RBP{BuildOffsetString(offset)}]";
+
+    public static string GenerateSetNotEqualToOffset(int offset)
+        => $"SETNE [RBP{BuildOffsetString(offset)}]";
+
+    public static string GenerateSetGreaterToOffset(int offset)
+        => $"SETG [RBP{BuildOffsetString(offset)}]";
+    
+    public static string GenerateSetGreaterEqualToOffset(int offset)
+        => $"SETGE [RBP{BuildOffsetString(offset)}]";
+    
+    public static string GenerateSetLessToOffset(int offset)
+        => $"SETL [RBP{BuildOffsetString(offset)}]";
+    
+    public static string GenerateSetLessEqualToOffset(int offset)
+        => $"SETLE [RBP{BuildOffsetString(offset)}]";
 
     public static string GenerateAnd(Register left, Register right)
         => $"AND {left}, {right}";

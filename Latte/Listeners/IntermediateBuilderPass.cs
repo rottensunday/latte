@@ -11,17 +11,18 @@ using Scopes;
 public class IntermediateBuilderPass : LatteBaseListener
 {
     private readonly ParseTreeProperty<IConstExpression> _constantExpressions;
+    private readonly Stack<LatteParser.StmtContext> _elseStmtsStack = new();
     private readonly GlobalScope _globals;
+    private readonly Stack<LatteParser.ExprContext> _ifCondsStack = new();
+    private readonly Stack<IfIntermediateInstruction> _ifsStack = new();
+    private readonly Stack<InstructionType> _opsStack = new();
     private readonly ParseTreeProperty<IScope> _scopes;
     private readonly Stack<Term> _termsStack = new();
     private readonly ParseTreeProperty<LatteType> _types;
-    private IntermediateFunction _currentFunction;
-    private readonly Stack<InstructionType> _opsStack = new();
-    private readonly Stack<IfIntermediateInstruction> _ifsStack = new();
-    private readonly Stack<LatteParser.StmtContext> _elseStmtsStack = new();
-    private readonly Stack<LatteParser.ExprContext> _ifCondsStack = new();
     private readonly Stack<LabelIntermediateInstruction> _whileBeginStack = new();
     public readonly List<IntermediateFunction> IntermediateFunctions = new();
+    private IntermediateFunction _currentFunction;
+    private int _currentLabel;
 
     public IntermediateBuilderPass(
         GlobalScope globals,
@@ -43,7 +44,7 @@ public class IntermediateBuilderPass : LatteBaseListener
 
         foreach (var kvp in arguments)
         {
-            _currentFunction.Variables.Add(_currentFunction.GetNextRegister(kvp.Key, true));
+            _currentFunction.Variables.Add(_currentFunction.GetNextRegister(kvp.Value.LatteType, kvp.Key, true));
         }
     }
 
@@ -51,6 +52,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     {
         var instructions = _currentFunction.Instructions;
         var newInstructions = new List<BaseIntermediateInstruction>();
+        var remove = false;
 
         for (var i = 0; i < instructions.Count; i++)
         {
@@ -75,7 +77,94 @@ public class IntermediateBuilderPass : LatteBaseListener
             {
                 newInstructions.Add(instructions[i]);
             }
+
+            // if (instructions[i] is IfIntermediateInstruction 
+            //         { ConditionInstruction.FirstOperand: ConstantBoolTerm constantBoolTerm } ifIntermediateInstruction)
+            // {
+            //     jumpLabel = ifIntermediateInstruction.JumpLabel.LabelTerm.Label;
+            //     ifElseEndLabel = ifIntermediateInstruction.JumpLabel.LabelTerm.Label;
+            //     
+            //     
+            // }
         }
+
+        bool conditionVal = false;
+        string jumpLabel = "";
+        string ifElseEndJumpLabel = "";
+
+        BaseIntermediateInstruction constIf;
+
+        do
+        {
+            constIf = newInstructions.Find(
+                x =>
+                {
+                    var result = x is IfIntermediateInstruction
+                    {
+                        ConditionInstruction:
+                        {
+                            FirstOperand: ConstantBoolTerm,
+                            SecondOperand: null
+                        }
+                    };
+        
+                    if (result)
+                    {
+                        var ifIntermediateInstruction = x as IfIntermediateInstruction;
+                        conditionVal = (ifIntermediateInstruction.ConditionInstruction.FirstOperand as ConstantBoolTerm)
+                            .Value;
+                        jumpLabel = ifIntermediateInstruction.JumpLabel.LabelTerm.Label;
+                        ifElseEndJumpLabel = ifIntermediateInstruction.IfElseEndLabel.LabelTerm.Label;
+                    }
+        
+                    return result;
+                });
+        
+            if (constIf != null)
+            {
+                var arr = newInstructions.ToArray();
+                
+                var fromIndex = newInstructions.FindIndex(x => x == constIf);
+                var jumpIndex = newInstructions.FindIndex(
+                    x => x is LabelIntermediateInstruction xy && xy.LabelTerm.Label == jumpLabel);
+                var elseEndIndex = newInstructions.FindIndex(
+                    x => x is LabelIntermediateInstruction xy && xy.LabelTerm.Label == ifElseEndJumpLabel && !xy.IsJump);
+
+                if (conditionVal)
+                {
+                    if (elseEndIndex != -1)
+                    {
+                        newInstructions = arr[..fromIndex]
+                            .Concat(arr[(fromIndex + 1)..(jumpIndex - 1)])
+                            .Concat(arr[(elseEndIndex + 1)..])
+                            .ToList();
+                    }
+                    else
+                    {
+                        newInstructions = arr[..fromIndex]
+                            .Concat(arr[(fromIndex + 1)..jumpIndex])
+                            .Concat(arr[(jumpIndex + 1)..])
+                            .ToList();
+                    }
+                }
+                else
+                {
+                    if (elseEndIndex != -1)
+                    {
+                        newInstructions = arr[..fromIndex]
+                            .Concat(arr[(jumpIndex + 1)..elseEndIndex])
+                            .Concat(arr[(elseEndIndex + 1)..])
+                            .ToList();
+                    }
+                    else
+                    {
+                        newInstructions = arr[..fromIndex]
+                            .Concat(arr[(jumpIndex + 1)..])
+                            .ToList();
+                    }
+                }
+            }
+        } while (constIf != null);
 
         _currentFunction.Instructions = newInstructions;
 
@@ -153,7 +242,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         {
             throw new Exception("No variable to increment");
         }
-        
+
         _currentFunction.Instructions.Add(
             new IntermediateInstruction(
                 registerTerm,
@@ -166,7 +255,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     {
         var value = _termsStack.Pop();
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(LatteType.Int);
 
         _termsStack.Push(nextRegister);
 
@@ -181,12 +270,13 @@ public class IntermediateBuilderPass : LatteBaseListener
     public override void ExitEUnOp(LatteParser.EUnOpContext context)
     {
         var value = _termsStack.Pop();
+        var isMinus = context.GetOpType() == UnaryOpType.Minus;
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(isMinus ? LatteType.Int : LatteType.Boolean);
 
         _termsStack.Push(nextRegister);
 
-        var instructionType = context.GetOpType() == UnaryOpType.Minus
+        var instructionType = isMinus
             ? InstructionType.NegateInt
             : InstructionType.NegateBool;
 
@@ -198,10 +288,25 @@ public class IntermediateBuilderPass : LatteBaseListener
                 null));
     }
 
+    public override void EnterEAnd(LatteParser.EAndContext context)
+    {
+        var x = context.expr()[0];
+
+        if (x is LatteParser.EIdContext eIdContext)
+        {
+            
+        }
+    }
+
     public override void ExitEAnd(LatteParser.EAndContext context)
     {
         var second = _termsStack.Pop();
         var first = _termsStack.Pop();
+        
+        // if first RegisterTerm => if (!first) jmp end else jmp l1
+        // l1: if second RegisterTerm => if (!second) jmp end else jmp do
+        
+        // ConstantBoolTerm; RegistermTerm; FunctionCallTerm; 
 
         var constant = _constantExpressions.Get(context);
 
@@ -212,7 +317,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(LatteType.Boolean);
 
         _termsStack.Push(nextRegister);
 
@@ -238,7 +343,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(LatteType.Boolean);
 
         _termsStack.Push(nextRegister);
 
@@ -276,6 +381,7 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void EnterEId(LatteParser.EIdContext context)
     {
+        var identifierType = _types.Get(context);
         var lhs = context.ID().Symbol.Text;
 
         if (_currentFunction.TryGetVariable(lhs, out var variableRegister))
@@ -285,12 +391,13 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var register = _currentFunction.GetNextRegister(context.ID().Symbol.Text);
+        var register = _currentFunction.GetNextRegister(identifierType, context.ID().Symbol.Text);
         _termsStack.Push(register);
     }
 
     public override void ExitEFunCall(LatteParser.EFunCallContext context)
     {
+        var functionReturnType = _types.Get(context);
         var funName = context.ID().Symbol.Text;
         var args = context.expr();
         var values = new Stack<Term>();
@@ -302,21 +409,23 @@ public class IntermediateBuilderPass : LatteBaseListener
 
         var term = new FunctionCallTerm(funName, values.ToList());
 
+        var register = functionReturnType is LatteType.Void or LatteType.Invalid
+            ? null
+            : _currentFunction.GetNextRegister(functionReturnType);
 
-
-        var register = _currentFunction.GetNextRegister();
         var callInstruction = new IntermediateInstruction(
             register,
             term,
             InstructionType.FunctionCall,
             null);
-        
+
         _termsStack.Push(register);
         _currentFunction.Instructions.Add(callInstruction);
     }
 
     public override void ExitEAddOp(LatteParser.EAddOpContext context)
     {
+        var resultType = _types.Get(context);
         var second = _termsStack.Pop();
         var first = _termsStack.Pop();
         var op = _opsStack.Pop();
@@ -337,7 +446,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(resultType);
 
         _termsStack.Push(nextRegister);
 
@@ -364,7 +473,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(LatteType.Int);
 
         _termsStack.Push(nextRegister);
 
@@ -391,7 +500,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var nextRegister = _currentFunction.GetNextRegister();
+        var nextRegister = _currentFunction.GetNextRegister(LatteType.Boolean);
 
         _termsStack.Push(nextRegister);
 
@@ -405,6 +514,7 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void ExitAss(LatteParser.AssContext context)
     {
+        var rhsType = _types.Get(context.expr());
         // var rightConst = _constantExpressions.Get(context.expr());
         // Term rhs = null;
         //
@@ -445,7 +555,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             return;
         }
 
-        var register = _currentFunction.GetNextRegister(context.ID().Symbol.Text);
+        var register = _currentFunction.GetNextRegister(rhsType, context.ID().Symbol.Text);
 
         _currentFunction.Instructions.Add(
             new IntermediateInstruction(
@@ -459,9 +569,10 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void ExitAssDecl(LatteParser.AssDeclContext context)
     {
+        var rhsType = _types.Get(context.expr());
         var rhs = _termsStack.Pop();
 
-        var register = _currentFunction.GetNextRegister(context.ID().Symbol.Text);
+        var register = _currentFunction.GetNextRegister(rhsType, context.ID().Symbol.Text);
 
         _currentFunction.Instructions.Add(
             new IntermediateInstruction(
@@ -477,7 +588,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     {
         var term = _termsStack.Pop();
         var instruction = new IntermediateInstruction(null, term, InstructionType.Return, null);
-        
+
         _currentFunction.Instructions.Add(instruction);
     }
 
@@ -489,7 +600,7 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void EnterCond(LatteParser.CondContext context)
     {
-        var label = _currentFunction.GetNextLabel();
+        var label = GetNextLabel();
         var cond = new IntermediateInstruction(null, null, InstructionType.And, null);
         var ifInstruction = new IfIntermediateInstruction(cond, label);
         _ifsStack.Push(ifInstruction);
@@ -505,8 +616,8 @@ public class IntermediateBuilderPass : LatteBaseListener
     public override void EnterCondElse(LatteParser.CondElseContext context)
     {
         _elseStmtsStack.Push(context.stmt()[0]);
-        var elseLabel = _currentFunction.GetNextLabel();
-        var endLabel = _currentFunction.GetNextLabel();
+        var elseLabel = GetNextLabel();
+        var endLabel = GetNextLabel();
         var cond = new IntermediateInstruction(null, null, InstructionType.And, null);
 
         var ifInstruction = new IfIntermediateInstruction(cond, elseLabel, endLabel);
@@ -522,12 +633,12 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void EnterWhile(LatteParser.WhileContext context)
     {
-        var label = _currentFunction.GetNextLabel();
-        
+        var label = GetNextLabel();
+
         _currentFunction.Instructions.Add(label);
         _whileBeginStack.Push(label);
-        
-        var exitLabel = _currentFunction.GetNextLabel();
+
+        var exitLabel = GetNextLabel();
         var cond = new IntermediateInstruction(null, null, InstructionType.And, null);
         var ifInstruction = new IfIntermediateInstruction(cond, exitLabel);
         _ifsStack.Push(ifInstruction);
@@ -553,7 +664,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             {
                 _ifCondsStack.Pop();
                 var ifCondInstruction = _ifsStack.Peek();
-                
+
                 if (_termsStack.Count > 0 && _termsStack.Peek() is ConstantBoolTerm constBool)
                 {
                     ifCondInstruction.ConditionInstruction = new IntermediateInstruction(
@@ -565,12 +676,19 @@ public class IntermediateBuilderPass : LatteBaseListener
                     ifCondInstruction.ConditionInstruction = new IntermediateInstruction(
                         null, registerTerm, InstructionType.None, null);
                 }
+                else if (expr is LatteParser.EFunCallContext && _termsStack.Count > 0 &&
+                         _termsStack.Peek() is RegisterTerm registerTermFunc)
+                {
+                    ifCondInstruction.ConditionInstruction = new IntermediateInstruction(
+                        null, registerTermFunc, InstructionType.None, null);
+                }
                 else
                 {
-                    ifCondInstruction.ConditionInstruction = (IntermediateInstruction)_currentFunction.Instructions.Last();
+                    ifCondInstruction.ConditionInstruction =
+                        (IntermediateInstruction)_currentFunction.Instructions.Last();
                     _currentFunction.Instructions.RemoveAt(_currentFunction.Instructions.Count - 1);
                 }
-                
+
                 _currentFunction.Instructions.Add(ifCondInstruction);
             }
         }
@@ -583,10 +701,16 @@ public class IntermediateBuilderPass : LatteBaseListener
             {
                 _elseStmtsStack.Pop();
                 var ifCondInstruction = _ifsStack.Peek();
-                
-                _currentFunction.Instructions.Add(new LabelIntermediateInstruction(ifCondInstruction.IfElseEndLabel.LabelTerm, true));
+
+                _currentFunction.Instructions.Add(
+                    new LabelIntermediateInstruction(ifCondInstruction.IfElseEndLabel.LabelTerm, true));
                 _currentFunction.Instructions.Add(ifCondInstruction.JumpLabel);
             }
         }
+    }
+
+    private LabelIntermediateInstruction GetNextLabel()
+    {
+        return new(new LabelTerm($"l{_currentLabel++}"));
     }
 }

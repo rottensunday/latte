@@ -1,0 +1,20 @@
+int main() {
+    int result = factorial(10);
+    int fibResult = fibRec(9);
+    
+    printInt(result);
+    printInt(fibResult);
+    
+    return result;
+}
+
+int factorial(int n) {
+    if (n <= 1) return 1;
+    else return n * (factorial(n-1));
+}
+
+int fibRec(int n) {
+    if (n <= 1) return 1;
+    
+    return fibRec(n-1) + fibRec(n-2);
+}

@@ -1,0 +1,33 @@
+int main() {
+    bigTest(1,2,3,4,5,6,7,8,9,10, false, false);
+    // printBool(false || false);
+    
+    return 0;
+}
+
+int bigTest(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, boolean first, boolean second) {
+    int x = a + b + c + d + e + f + g + h + i + j;
+    int y = 200;
+    
+    printBool(second);
+    
+    if (second || true) {
+        printInt(123);
+    }
+    
+    printInt(x);
+    
+    return x;
+}
+
+void printBool(boolean x) {
+    if (x) {
+        printInt(1);
+        
+        return;
+    }
+    
+    printInt(0);
+    
+    return;
+}

@@ -1,18 +1,22 @@
 int main() {
-    bigTest(1,2,3,4,5,6,7,8,9,10, false, true);
+    boolean first = false;
+    boolean second = false;
+    boolean third = false;
+    if (first && second) {
+        printInt(3);
+    }
     
     return 0;
 }
 
-int bigTest(int a, int b, int c, int d, int e, int f, int g, int h, int i, int j, boolean first, boolean second) {
-    int x = a + b + c + d + e + f + g + h + i + j;
-    int y = 200;
+boolean trueWithSideEffect() {
+    printInt(1);
     
-    if (first || !!second) {
-        printInt(123);
-    }
+    return true;
+}
+
+boolean falseWithSideEffect() {
+    printInt(0);
     
-    printInt(x);
-    
-    return x;
+    return false;
 }
