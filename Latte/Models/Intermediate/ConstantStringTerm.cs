@@ -11,6 +11,11 @@ public class ConstantStringTerm : Term
 
     public override string ToString()
     {
-        return Value;
+        return $"\"{Value}\"";
+    }
+
+    public override List<string> GetStringLiterals()
+    {
+        return new List<string> { Value };
     }
 }

@@ -16,4 +16,9 @@ public class LabelIntermediateInstruction : BaseIntermediateInstruction
     {
         return !IsJump ? $"{LabelTerm.Label}:" : $"jmp {LabelTerm.Label}";
     }
+
+    public override List<string> GetStringLiterals()
+    {
+        return new List<string>();
+    }
 }

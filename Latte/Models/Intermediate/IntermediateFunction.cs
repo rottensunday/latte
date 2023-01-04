@@ -19,13 +19,23 @@ public class IntermediateFunction
     
     public string Name { get; set; }
     
-    public RegisterTerm GetNextRegister(LatteType type, string identifier = null, bool isParam = false) => new($"t{_currentRegister++}", type, identifier, isParam);
+    public RegisterTerm GetNextRegister(
+        LatteType type, 
+        string identifier = null,
+        bool isParam = false,
+        IScope scope = null) => new($"t{_currentRegister++}", type, identifier, isParam, scope);
 
     
-    public bool TryGetVariable(string name, out RegisterTerm register)
+    public bool TryGetVariable(string name, IScope scope, out RegisterTerm register)
     {
-        register = Variables.Find(x => x.Identifier == name);
+        if (scope == null)
+        {
+            register = null;
+            return false;
+        }
+        
+        register = Variables.Find(x => x.Identifier == name && x.Scope == scope);
 
-        return register != null;
+        return register != null || TryGetVariable(name, scope.GetEnclosingScope(), out register);
     }
 }

@@ -49,6 +49,8 @@ public static class GasSymbols
 .extern _readString
 .extern _readInt
 .extern _error
+.extern _concatStrings
+.extern _compareStrings
 .intel_syntax
 .global _main";
 
@@ -63,6 +65,9 @@ public static class GasSymbols
 
     public static string GenerateMov(int value, Register to)
         => $"MOV {to}, {value}";
+
+    public static string GenerateLeaForLiteral(string label, Register to)
+        => $"LEA {to}, {label}[RIP]";
     
     public static string GenerateMovzx(int value, Register to)
         => $"MOVZX {to}, {value}";
@@ -76,8 +81,8 @@ public static class GasSymbols
     public static string GenerateMovToOffset(int offset, Register from)
         => $"MOV [RBP{BuildOffsetString(offset)}], {from}";
     
-    public static string GenerateConstantMovToMemory(int offset, int value)
-        => $"MOV QWORD PTR [RBP{BuildOffsetString(offset)}], {value}";
+    public static string GenerateConstantMovToMemory(int offset, int value, bool isBool)
+        => $"MOV {(isBool ? "BYTE" : "QWORD")} PTR [RBP{BuildOffsetString(offset)}], {value}";
 
     public static string GenerateUnconditionalJump(string labelName)
         => $"JMP {labelName}";

@@ -1,0 +1,69 @@
+int main() {
+    boolean first = true;
+    boolean second = true;
+    boolean third = true;
+    int x = 13;
+    int y = 14;
+    
+     // if ((first || second) && (second || third)) {
+     //     printInt(3);
+     // }
+    
+     // if ((trueWithSideEffect() || falseWithSideEffect()) && (falseWithSideEffect() || trueWithSideEffect())) {
+     //    printInt(3);
+    //  }
+    
+     // if (falseWithSideEffect() || falseWithSideEffect() || trueWithSideEffect() && trueWithSideEffect()) {
+     //      printInt(3);
+     // }
+     
+     // if (!falseWithSideEffect() || x + 1 > y || !(trueWithSideEffect() && trueWithSideEffect() || first) || trueWithSideEffect()) {
+     //    printInt(3);
+     // }
+    
+    // if (trueWithSideEffect() || trueWithSideEffect()) {
+    //     printInt(3);
+    // }
+    
+    boolean z = (first || !true);
+    printBoolean(z);
+    printBoolean(z);
+    printBoolean(z);
+    boolean p1 = x > y;
+    printBoolean(z);
+    boolean p2 = z && p1 || false;
+    printBoolean(true);
+    printBoolean(z);
+    printBoolean(z);
+    printBoolean(p1);
+    printBoolean(z && p1);
+    printBoolean(false);
+    printBoolean(p2);
+    
+    return 0;
+}
+
+boolean trueWithSideEffect() {
+    printInt(1);
+    
+    return true;
+}
+
+boolean falseWithSideEffect() {
+    printInt(0);
+    
+    return false;
+}
+
+void printBoolean(boolean z) {
+
+    if (z) {
+        printInt(1);
+    }
+    
+    if (!z) {
+        printInt(0);
+    }
+    
+    return;
+}

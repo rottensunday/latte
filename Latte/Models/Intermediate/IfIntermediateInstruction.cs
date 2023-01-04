@@ -2,24 +2,45 @@ namespace Latte.Models.Intermediate;
 
 public class IfIntermediateInstruction : BaseIntermediateInstruction
 {
+    // public IfIntermediateInstruction(
+    //     IntermediateInstruction condition, 
+    //     LabelIntermediateInstruction jumpLabel, 
+    //     LabelIntermediateInstruction ifElseEndLabel = null,
+    //     bool negate = false)
+    // {
+    //     Condition = condition;
+    //     JumpLabel = jumpLabel;
+    //     IfElseEndLabel = ifElseEndLabel;
+    //     Negate = negate;
+    // }
+
     public IfIntermediateInstruction(
-        IntermediateInstruction conditionInstruction, 
-        LabelIntermediateInstruction jumpLabel, 
-        LabelIntermediateInstruction ifElseEndLabel = null)
+        Term term,
+        LabelIntermediateInstruction jumpLabel,
+        LabelIntermediateInstruction ifElseEndLabel = null,
+        bool negate = false)
     {
-        ConditionInstruction = conditionInstruction;
+        Condition = term;
         JumpLabel = jumpLabel;
         IfElseEndLabel = ifElseEndLabel;
+        Negate = negate;
     }
 
-    public IntermediateInstruction ConditionInstruction { get; set; }
+    public Term Condition { get; set; }
     
     public LabelIntermediateInstruction JumpLabel { get; set; }
     
     public LabelIntermediateInstruction IfElseEndLabel { get; set; }
+    
+    public bool Negate { get; set; }
 
     public override string ToString()
     {
-        return $"if !({ConditionInstruction}) then jumpto {JumpLabel.LabelTerm.Label}";
+        return $"if {(Negate ? "!" : "")}({Condition}) then jumpto {JumpLabel.LabelTerm.Label}";
+    }
+
+    public override List<string> GetStringLiterals()
+    {
+        return Condition.GetStringLiterals().ToList();
     }
 }

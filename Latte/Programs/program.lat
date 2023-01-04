@@ -1,22 +1,11 @@
+/* test input */
+
 int main() {
-    boolean first = false;
-    boolean second = false;
-    boolean third = false;
-    if (first && second) {
-        printInt(3);
-    }
-    
-    return 0;
-}
+  int x = readInt();
+  string y = readString();
+  string z = readString();
 
-boolean trueWithSideEffect() {
-    printInt(1);
-    
-    return true;
-}
-
-boolean falseWithSideEffect() {
-    printInt(0);
-    
-    return false;
+  printInt(x-5);
+  printString(y+z);  
+  return 0 ;
 }

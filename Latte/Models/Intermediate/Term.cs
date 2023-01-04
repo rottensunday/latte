@@ -1,6 +1,6 @@
 namespace Latte.Models.Intermediate;
 
-public class Term
+public abstract class Term
 {
-    
+    public abstract List<string> GetStringLiterals();
 }

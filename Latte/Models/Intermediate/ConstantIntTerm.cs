@@ -13,4 +13,9 @@ public class ConstantIntTerm : Term
     {
         return Value.ToString();
     }
+
+    public override List<string> GetStringLiterals()
+    {
+        return new List<string>();
+    }
 }

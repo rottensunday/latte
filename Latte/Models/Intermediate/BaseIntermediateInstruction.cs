@@ -1,6 +1,6 @@
 namespace Latte.Models.Intermediate;
 
-public class BaseIntermediateInstruction
+public abstract class BaseIntermediateInstruction
 {
-    
+    public abstract List<string> GetStringLiterals();
 }

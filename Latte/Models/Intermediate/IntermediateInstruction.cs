@@ -51,4 +51,12 @@ public class IntermediateInstruction : BaseIntermediateInstruction
             InstructionType.None => FirstOperand.ToString(),
         };
     }
+
+    public override List<string> GetStringLiterals()
+    {
+        var firstOperandLiterals = FirstOperand?.GetStringLiterals() ?? new List<string>();
+        var secondOperandLiterals = SecondOperand?.GetStringLiterals() ?? new List<string>();
+
+        return firstOperandLiterals.Concat(secondOperandLiterals).ToList();
+    }
 }

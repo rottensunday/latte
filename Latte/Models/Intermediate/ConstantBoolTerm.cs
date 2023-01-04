@@ -13,4 +13,9 @@ public class ConstantBoolTerm : Term
     {
         return Value.ToString();
     }
+
+    public override List<string> GetStringLiterals()
+    {
+        return new List<string>();
+    }
 }

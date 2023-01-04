@@ -87,7 +87,7 @@ public class InlinePass : LatteBaseListener
 
     public override void ExitEStr(LatteParser.EStrContext context)
     {
-        ConstantExpressions.Put(context, new ConstExpression<string>(context.GetText()));
+        ConstantExpressions.Put(context, new ConstExpression<string>(context.GetText()[1..^1]));
     }
 
     public override void ExitEParen(LatteParser.EParenContext context)
@@ -143,10 +143,22 @@ public class InlinePass : LatteBaseListener
             case (RelOpType.GreaterEqual, ConstExpression<int> x, ConstExpression<int> y):
                 ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value >= y.Value));
                 break;
-            case (RelOpType.Equal, ConstExpression<object> x, ConstExpression<object> y):
+            case (RelOpType.Equal, ConstExpression<int> x, ConstExpression<int> y):
                 ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value == y.Value));
                 break;
-            case (RelOpType.NotEqual, ConstExpression<object> x, ConstExpression<object> y):
+            case (RelOpType.Equal, ConstExpression<bool> x, ConstExpression<bool> y):
+                ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value == y.Value));
+                break;
+            case (RelOpType.Equal, ConstExpression<string> x, ConstExpression<string> y):
+                ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value == y.Value));
+                break;
+            case (RelOpType.NotEqual, ConstExpression<int> x, ConstExpression<int> y):
+                ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value != y.Value));
+                break;
+            case (RelOpType.NotEqual, ConstExpression<bool> x, ConstExpression<bool> y):
+                ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value != y.Value));
+                break;
+            case (RelOpType.NotEqual, ConstExpression<string> x, ConstExpression<string> y):
                 ConstantExpressions.Put(context, new ConstExpression<bool>(x.Value != y.Value));
                 break;
         }

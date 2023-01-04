@@ -41,4 +41,9 @@ public class FunctionCallTerm : Term
 
         return builder.ToString();
     }
+
+    public override List<string> GetStringLiterals()
+    {
+        return Arguments.SelectMany(x => x.GetStringLiterals()).ToList();
+    }
 }
