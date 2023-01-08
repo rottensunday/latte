@@ -13,13 +13,10 @@ public class CompilationResult
     public bool Success => Errors == null || Errors.Count == 0;
 
     public List<CompilationError> Errors { get; set; }
-    
+
     public List<string> Instructions { get; set; }
 
-    public void SetInstructions(List<string> instructions)
-    {
-        Instructions = instructions;
-    }
+    public void SetInstructions(List<string> instructions) => Instructions = instructions;
 
     public void WriteErrors()
     {
@@ -92,7 +89,10 @@ public class CompilationResult
             var tempAssembler = "temp.s";
             var tempBin = "temp";
             File.WriteAllLines(tempAssembler, Instructions);
-            var generateProcess = new Process { StartInfo = new ProcessStartInfo("clang", $"-arch x86_64 -o {tempBin} library.o {tempAssembler}") };
+            var generateProcess = new Process
+            {
+                StartInfo = new ProcessStartInfo("clang", $"-arch x86_64 -o {tempBin} library.o {tempAssembler}")
+            };
             generateProcess.Start();
             generateProcess.WaitForExit();
 
@@ -101,11 +101,11 @@ public class CompilationResult
             readProcess.Start();
             var output = readProcess.StandardOutput.ReadToEnd();
             readProcess.WaitForExit();
-            
-            
+
+
             File.Delete(tempAssembler);
             File.Delete(tempBin);
-            
+
             Console.Write(output);
 
             return output;
@@ -121,7 +121,10 @@ public class CompilationResult
             var tempAssembler = "temp.s";
             var tempBin = "temp";
             File.WriteAllLines(tempAssembler, Instructions);
-            var generateProcess = new Process { StartInfo = new ProcessStartInfo("clang", $"-arch x86_64 -o {tempBin} library.o {tempAssembler}") };
+            var generateProcess = new Process
+            {
+                StartInfo = new ProcessStartInfo("clang", $"-arch x86_64 -o {tempBin} library.o {tempAssembler}")
+            };
             generateProcess.Start();
             generateProcess.WaitForExit();
 
@@ -130,10 +133,10 @@ public class CompilationResult
             readProcess.Start();
             var output = readProcess.StandardOutput.ReadToEnd();
             readProcess.WaitForExit();
-            
+
             File.Delete(tempAssembler);
             File.Delete(tempBin);
-            
+
             File.WriteAllText(path, output);
         }
     }

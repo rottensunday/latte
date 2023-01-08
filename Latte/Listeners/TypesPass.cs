@@ -16,50 +16,25 @@ public class TypesPass : LatteBaseListener
         _scopes = scopes;
     }
 
-    public override void EnterProgram(LatteParser.ProgramContext context)
-    {
-        _currentScope = _globals;
-    }
+    public override void EnterProgram(LatteParser.ProgramContext context) => _currentScope = _globals;
 
-    public override void EnterTopDef(LatteParser.TopDefContext context)
-    {
-        _currentScope = _scopes.Get(context);
-    }
+    public override void EnterTopDef(LatteParser.TopDefContext context) => _currentScope = _scopes.Get(context);
 
-    public override void ExitTopDef(LatteParser.TopDefContext context)
-    {
+    public override void ExitTopDef(LatteParser.TopDefContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
-    }
 
-    public override void EnterBlock(LatteParser.BlockContext context)
-    {
-        _currentScope = _scopes.Get(context);
-    }
+    public override void EnterBlock(LatteParser.BlockContext context) => _currentScope = _scopes.Get(context);
 
-    public override void ExitBlock(LatteParser.BlockContext context)
-    {
+    public override void ExitBlock(LatteParser.BlockContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
-    }
 
-    public override void ExitEMulOp(LatteParser.EMulOpContext context)
-    {
-        Types.Put(context, LatteType.Int);
-    }
+    public override void ExitEMulOp(LatteParser.EMulOpContext context) => Types.Put(context, LatteType.Int);
 
-    public override void ExitEInt(LatteParser.EIntContext context)
-    {
-        Types.Put(context, LatteType.Int);
-    }
+    public override void ExitEInt(LatteParser.EIntContext context) => Types.Put(context, LatteType.Int);
 
-    public override void ExitETrue(LatteParser.ETrueContext context)
-    {
-        Types.Put(context, LatteType.Boolean);
-    }
+    public override void ExitETrue(LatteParser.ETrueContext context) => Types.Put(context, LatteType.Boolean);
 
-    public override void ExitEFalse(LatteParser.EFalseContext context)
-    {
-        Types.Put(context, LatteType.Boolean);
-    }
+    public override void ExitEFalse(LatteParser.EFalseContext context) => Types.Put(context, LatteType.Boolean);
 
     public override void ExitEId(LatteParser.EIdContext context)
     {
@@ -73,25 +48,13 @@ public class TypesPass : LatteBaseListener
         Types.Put(context, symbol.LatteType);
     }
 
-    public override void ExitEAnd(LatteParser.EAndContext context)
-    {
-        Types.Put(context, LatteType.Boolean);
-    }
+    public override void ExitEAnd(LatteParser.EAndContext context) => Types.Put(context, LatteType.Boolean);
 
-    public override void ExitEOr(LatteParser.EOrContext context)
-    {
-        Types.Put(context, LatteType.Boolean);
-    }
+    public override void ExitEOr(LatteParser.EOrContext context) => Types.Put(context, LatteType.Boolean);
 
-    public override void ExitEParen(LatteParser.EParenContext context)
-    {
-        Types.Put(context, Types.Get(context.expr()));
-    }
+    public override void ExitEParen(LatteParser.EParenContext context) => Types.Put(context, Types.Get(context.expr()));
 
-    public override void ExitEStr(LatteParser.EStrContext context)
-    {
-        Types.Put(context, LatteType.String);
-    }
+    public override void ExitEStr(LatteParser.EStrContext context) => Types.Put(context, LatteType.String);
 
     public override void ExitEAddOp(LatteParser.EAddOpContext context)
     {
@@ -121,39 +84,7 @@ public class TypesPass : LatteBaseListener
         }
     }
 
-    public override void ExitERelOp(LatteParser.ERelOpContext context)
-    {
-        var leftType = Types.Get(context.expr()[0]);
-        var rightType = Types.Get(context.expr()[1]);
-
-        Types.Put(context, LatteType.Boolean);
-
-        // switch (context.relOp().GetText())
-        // {
-        //     case "<":
-        //     case "<=":
-        //     case ">":
-        //     case ">=":
-        //         Types.Put(context, LatteType.Int);
-        //         break;
-        //     case "==":
-        //     case "!=":
-        //         switch (leftType)
-        //         {
-        //             case LatteType.Boolean when rightType == LatteType.Boolean:
-        //                 Types.Put(context, LatteType.Boolean);
-        //                 break;
-        //             case LatteType.Int when rightType == LatteType.Int:
-        //                 Types.Put(context, LatteType.Int);
-        //                 break;
-        //             default:
-        //                 Types.Put(context, LatteType.Invalid);
-        //                 break;
-        //         }
-        //
-        //         break;
-        // }
-    }
+    public override void ExitERelOp(LatteParser.ERelOpContext context) => Types.Put(context, LatteType.Boolean);
 
     public override void ExitEFunCall(LatteParser.EFunCallContext context)
     {

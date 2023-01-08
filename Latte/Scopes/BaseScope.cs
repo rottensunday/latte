@@ -11,15 +11,9 @@ public abstract class BaseScope : IScope
         _enclosingScope = enclosingScope;
     }
 
-    public virtual string GetScopeName()
-    {
-        return "base scope??? idk";
-    }
+    public virtual string GetScopeName() => "base scope??? idk";
 
-    public IScope GetEnclosingScope()
-    {
-        return _enclosingScope;
-    }
+    public IScope GetEnclosingScope() => _enclosingScope;
 
     public void Define(Symbol sym)
     {
@@ -39,10 +33,7 @@ public abstract class BaseScope : IScope
         return enclosingScope != null ? enclosingScope.Resolve(name) : null;
     }
 
-    public Symbol ResolveFlat(string name)
-    {
-        return _symbols.TryGetValue(name, out var symbol) ? symbol : null;
-    }
+    public Symbol ResolveFlat(string name) => _symbols.TryGetValue(name, out var symbol) ? symbol : null;
 
     public FunctionSymbol GetEnclosingFunction()
     {
@@ -56,8 +47,5 @@ public abstract class BaseScope : IScope
         return enclosingScope as FunctionSymbol;
     }
 
-    public override string ToString()
-    {
-        return $"{GetScopeName()} : {string.Join(", ", _symbols.Keys)}";
-    }
+    public override string ToString() => $"{GetScopeName()} : {string.Join(", ", _symbols.Keys)}";
 }

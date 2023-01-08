@@ -9,13 +9,7 @@ public class ConstantStringTerm : Term
 
     public string Value { get; set; }
 
-    public override string ToString()
-    {
-        return $"\"{Value}\"";
-    }
+    public override string ToString() => $"\"{Value}\"";
 
-    public override List<string> GetStringLiterals()
-    {
-        return new List<string> { Value };
-    }
+    public override List<string> GetStringLiterals() => new() { Value };
 }

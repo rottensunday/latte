@@ -5,31 +5,12 @@ using Scopes;
 
 public class IntermediateToX86Compiler
 {
-    private readonly List<Register> _paramRegisters = new()
-    {
-        Register.RDI,
-        Register.RSI,
-        Register.RDX,
-        Register.RCX,
-        Register.R8,
-        Register.R9
-    };
-
-    private readonly List<InstructionType> _intComparisons = new()
-    {
-        InstructionType.Equal,
-        InstructionType.NotEqual,
-        InstructionType.Greater,
-        InstructionType.GreaterEqual,
-        InstructionType.Less,
-        InstructionType.LessEqual
-    };
-
+    private readonly Dictionary<string, string> _literalsMap = new();
     private readonly Dictionary<RegisterTerm, int> _registerOffsetMap = new();
     private readonly List<string> _result = new();
-    private readonly Dictionary<string, string> _literalsMap = new();
+    private int _stackAlignedTo;
 
-    public List<string> Compile(List<IntermediateFunction> functions)
+    public IEnumerable<string> Compile(List<IntermediateFunction> functions)
     {
         var literals = functions
             .SelectMany(x => x.Instructions)
@@ -39,7 +20,7 @@ public class IntermediateToX86Compiler
         {
             AddStringLiteral(literal);
         }
-        
+
         foreach (var function in functions)
         {
             Reset();
@@ -54,36 +35,36 @@ public class IntermediateToX86Compiler
         AddInstruction(GasSymbols.GenerateFunctionSymbol(function.Name));
         CompileInstructions(function.Instructions, function.Variables);
 
-        if (!_result.Last().Contains("RET"))
+        if (_result.Last().Contains("RET"))
         {
-            AddInstruction(GasSymbols.GenerateMov(Register.RBP, Register.RSP));
-            AddInstruction(GasSymbols.GeneratePop(Register.RBP));
-            AddInstruction(GasSymbols.GenerateRet());
+            return;
         }
+
+        AddFnEpilog();
     }
 
-    private void Reset()
-    {
-        _registerOffsetMap.Clear();
-    }
+    private void Reset() => _registerOffsetMap.Clear();
 
     private void CompileInstructions(
         List<BaseIntermediateInstruction> instructions,
         List<RegisterTerm> variables)
     {
-        AddInstruction(GasSymbols.GeneratePush(Register.RBP));
-        AddInstruction(GasSymbols.GenerateMov(Register.RSP, Register.RBP));
+        AddFnProlog();
 
         var parameters = variables.Where(x => x.IsParam).ToList();
-        parameters = parameters
-            .Take(_paramRegisters.Count)
-            .Concat(parameters.Skip(_paramRegisters.Count).Reverse())
-            .ToList();
-        var tempRegisters = new List<Register>(_paramRegisters);
 
-        if (parameters.Count > _paramRegisters.Count)
+        // Parameters with stack parameters reversed
+        parameters = parameters
+            .Take(GasSymbols.ParamRegisters.Count)
+            .Concat(parameters.Skip(GasSymbols.ParamRegisters.Count).Reverse())
+            .ToList();
+
+        var tempRegisters = new List<Register>(GasSymbols.ParamRegisters);
+
+        if (parameters.Count > GasSymbols.ParamRegisters.Count)
         {
-            tempRegisters.AddRange(new List<Register>(new Register[parameters.Count - _paramRegisters.Count]));
+            tempRegisters.AddRange(
+                new List<Register>(new Register[parameters.Count - GasSymbols.ParamRegisters.Count]));
         }
 
         var minusOffset = 0;
@@ -93,21 +74,13 @@ public class IntermediateToX86Compiler
         {
             if (register == Register.None)
             {
+                // Setup stack parameter
                 plusOffset += 8;
-                
-                // if (parameter.Type == LatteType.Boolean)
-                // {
-                //     plusOffset += 1;
-                // }
-                // else
-                // {
-                //     plusOffset += 8;
-                // }
-                
                 _registerOffsetMap[parameter] = plusOffset;
             }
             else
             {
+                // Setup normal parameter (from registers)
                 if (parameter.Type == LatteType.Boolean)
                 {
                     minusOffset -= 1;
@@ -117,26 +90,24 @@ public class IntermediateToX86Compiler
                     minusOffset -= 8;
                 }
 
-                if (parameter.Type == LatteType.Boolean)
-                {
-                    AddInstruction(GasSymbols.GenerateMovToOffset(minusOffset, register.GetLowByte()));
-                }
-                else
-                {
-                    AddInstruction(GasSymbols.GenerateMovToOffset(minusOffset, register));
-                }
-                
+                // For boolean registers we load one byte from register (from low byte)
+                AddInstruction(
+                    parameter.Type == LatteType.Boolean
+                        ? GasSymbols.GenerateMovToOffset(minusOffset, register.GetLowByte())
+                        : GasSymbols.GenerateMovToOffset(minusOffset, register));
+
                 _registerOffsetMap[parameter] = minusOffset;
             }
         }
 
+        // Beside parameters we now handle all variables occuring in intermediate code
+        // and add them on stack
         var registersNeeded = instructions
             .OfType<IntermediateInstruction>()
             .SelectMany(x => new[] { x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm })
             .Where(x => x != null)
             .Except(parameters)
             .Distinct();
-
 
         foreach (var registerNeeded in registersNeeded)
         {
@@ -148,264 +119,227 @@ public class IntermediateToX86Compiler
             {
                 minusOffset -= 8;
             }
-            
+
             _registerOffsetMap.Add(registerNeeded, minusOffset);
         }
 
         minusOffset = -minusOffset;
-        minusOffset += (8 - (minusOffset % 8));
-        
+        // We need to round up offset to closest number divisible by 8
+        minusOffset += (8 - (minusOffset % 8)) % 8;
+
         AddInstruction(GasSymbols.GenerateSubtract(Register.RSP, minusOffset));
+
+        _stackAlignedTo = (plusOffset - 8 + minusOffset) % 16;
 
         foreach (var instruction in instructions)
         {
-            // if (instruction is IntermediateInstruction { InstructionType: InstructionType.Return })
-            // {
-            //     AddInstruction(GasSymbols.GenerateMov(Register.RBP, Register.RSP));
-            //     AddInstruction(GasSymbols.GeneratePop(Register.RBP));
-            // }
-
-            CompileInstruction(instruction, variables);
+            CompileInstruction(instruction);
         }
     }
 
-    private void CompileInstruction(
-        BaseIntermediateInstruction instruction,
-        List<RegisterTerm> variables)
+    private void CompileInstruction(BaseIntermediateInstruction instruction)
     {
-        if (instruction is LabelIntermediateInstruction labelIntermediateInstruction)
+        switch (instruction)
         {
-            AddInstruction(
-                labelIntermediateInstruction.IsJump
-                    ? GasSymbols.GenerateUnconditionalJump(labelIntermediateInstruction.LabelTerm.Label)
-                    : GasSymbols.GenerateLabel(labelIntermediateInstruction.LabelTerm.Label));
-        }
-
-        if (instruction is IntermediateInstruction intermediateInstruction)
-        {
-            switch (intermediateInstruction.InstructionType)
-            {
-                case InstructionType.Assignment:
-                    if (intermediateInstruction.FirstOperand is ConstantIntTerm intTerm)
-                    {
-                        SaveToVariable(intermediateInstruction.LeftHandSide, intTerm.Value);
-                    }
-
-                    if (intermediateInstruction.FirstOperand is ConstantBoolTerm boolTerm)
-                    {
-                        SaveToVariable(intermediateInstruction.LeftHandSide, Convert.ToInt32(boolTerm.Value), true);
-                    }
-
-                    if (intermediateInstruction.FirstOperand is ConstantStringTerm stringTerm)
-                    {
-                        var label = _literalsMap[stringTerm.Value];
-                        var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide];
-                        AddInstruction(GasSymbols.GenerateLeaForLiteral(label, Register.RAX));
-                        AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.RAX));
-                    }
-                    
-                    if (intermediateInstruction.FirstOperand is RegisterTerm registerTerm)
-                    {
-                        var register = registerTerm.Type == LatteType.Boolean ? Register.AL : Register.RAX;
-                        var sourceOffset = _registerOffsetMap[registerTerm];
-                        var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide];
-                        AddInstruction(GasSymbols.GenerateMovFromOffset(sourceOffset, register));
-                        AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, register));
-                    }
-
-                    break;
-                case InstructionType.Increment:
-                    GenerateIncrement(intermediateInstruction.FirstOperand);
-                    break;
-                case InstructionType.Decrement:
-                    GenerateDecrement(intermediateInstruction.FirstOperand);
-                    break;
-                case InstructionType.FunctionCall:
-                    GenerateFunctionCall(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Return:
-                    GenerateReturn(intermediateInstruction.FirstOperand);
-                    break;
-                case InstructionType.AddInt:
-                    GenerateAdd(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.SecondOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.AddString:
-                    GenerateAddStrings(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.SecondOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Subtract:
-                    GenerateSubtract(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.SecondOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Multiply:
-                    GenerateMultiply(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.SecondOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Divide:
-                    GenerateDivide(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.SecondOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Modulo:
-                    GenerateModulo(
-                        intermediateInstruction.FirstOperand,
-                        intermediateInstruction.SecondOperand,
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Equal:
-                    GenerateEqual(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.NotEqual:
-                    GenerateNotEqual(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Greater:
-                    GenerateRelOp(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide,
-                        GasSymbols.GenerateSetGreaterToOffset,
-                        GasSymbols.GenerateSetLessToOffset);
-                    break;
-                case InstructionType.GreaterEqual:
-                    GenerateRelOp(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide,
-                        GasSymbols.GenerateSetGreaterEqualToOffset,
-                        GasSymbols.GenerateSetLessEqualToOffset);
-                    break;
-                case InstructionType.Less:
-                    GenerateRelOp(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide,
-                        GasSymbols.GenerateSetLessToOffset,
-                        GasSymbols.GenerateSetGreaterToOffset);
-                    break;
-                case InstructionType.LessEqual:
-                    GenerateRelOp(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide,
-                        GasSymbols.GenerateSetLessEqualToOffset,
-                        GasSymbols.GenerateSetGreaterEqualToOffset);
-                    break;
-                case InstructionType.And:
-                    GenerateAnd(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.Or:
-                    GenerateOr(
-                        intermediateInstruction.FirstOperand, 
-                        intermediateInstruction.SecondOperand, 
-                        intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.NegateInt:
-                    GenerateNegate(intermediateInstruction.FirstOperand, intermediateInstruction.LeftHandSide);
-                    break;
-                case InstructionType.NegateBool:
-                    GenerateNot(intermediateInstruction.FirstOperand, intermediateInstruction.LeftHandSide);
-                    break;
-            }
-        }
-
-        if (instruction is IfIntermediateInstruction ifIntermediateInstruction)
-        {
-            var cmpInstruction = ifIntermediateInstruction.Condition;
-            var opRegister = cmpInstruction as RegisterTerm;
-            var opBool = cmpInstruction as ConstantBoolTerm;
-            var opFunCall = cmpInstruction as FunctionCallTerm;
-            var offset = 
-                opRegister != null ? _registerOffsetMap.GetValueOrDefault(opRegister) : 0;
-
-            if (opRegister != null)
-            {
-                AddInstruction(GasSymbols.GenerateMovzxFromOffset(offset, Register.RAX));
-                AddInstruction("TEST RAX, RAX");
-
-                AddInstruction(
-                    ifIntermediateInstruction.Negate
-                        ? $"JE {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}"
-                        : $"JNE {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}");
-                // AddInstruction($"JRCXZ {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}");
-
-                return;
-            }
-
-            if (opBool != null)
-            {
-                AddInstruction(GasSymbols.GenerateMov(Convert.ToInt32(opBool.Value), Register.RAX));
-                AddInstruction("TEST RAX, RAX");
-
-                AddInstruction(
-                    ifIntermediateInstruction.Negate
-                        ? $"JE {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}"
-                        : $"JNE {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}");
-
-                return;
-            }
-
-            if (opFunCall != null)
-            {
-                GenerateFunctionCall(opFunCall, null);
-                AddInstruction("TEST RAX, RAX");
-
-                AddInstruction(
-                    ifIntermediateInstruction.Negate
-                        ? $"JE {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}"
-                        : $"JNE {ifIntermediateInstruction.JumpLabel.LabelTerm.Label}");
-            }
+            case LabelIntermediateInstruction labelIntermediateInstruction:
+                CompileLabelInstruction(labelIntermediateInstruction);
+                break;
+            case IntermediateInstruction intermediateInstruction:
+                CompileIntermediateInstruction(intermediateInstruction);
+                break;
+            case IfIntermediateInstruction ifIntermediateInstruction:
+                CompileIfIntermediateInstruction(ifIntermediateInstruction);
+                break;
         }
     }
 
-    private void GenerateInverseJump(InstructionType instructionType, string label)
+    private void CompileLabelInstruction(LabelIntermediateInstruction labelIntermediateInstruction) =>
+        AddInstruction(
+            labelIntermediateInstruction.IsJump
+                ? GasSymbols.GenerateUnconditionalJump(labelIntermediateInstruction.LabelTerm.Label)
+                : GasSymbols.GenerateLabel(labelIntermediateInstruction.LabelTerm.Label));
+
+    private void CompileIntermediateInstruction(IntermediateInstruction intermediateInstruction)
     {
-        switch (instructionType)
+        switch (intermediateInstruction.InstructionType)
         {
+            case InstructionType.Assignment:
+                GenerateAssignment(intermediateInstruction);
+                break;
+            case InstructionType.Increment:
+                GenerateIncrement(intermediateInstruction.FirstOperand);
+                break;
+            case InstructionType.Decrement:
+                GenerateDecrement(intermediateInstruction.FirstOperand);
+                break;
+            case InstructionType.FunctionCall:
+                GenerateFunctionCall(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.Return:
+                GenerateReturn(intermediateInstruction.FirstOperand);
+                break;
+            case InstructionType.AddInt:
+                GenerateAdd(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.AddString:
+                GenerateAddStrings(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.Subtract:
+                GenerateSubtract(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.Multiply:
+                GenerateMultiply(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.Divide:
+                GenerateDivide(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.Modulo:
+                GenerateModulo(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
+                break;
             case InstructionType.Equal:
-                AddInstruction(GasSymbols.GenerateJumpNotEqual(label));
+                GenerateEqual(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
                 break;
             case InstructionType.NotEqual:
-                AddInstruction(GasSymbols.GenerateJumpEqual(label));
+                GenerateNotEqual(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
                 break;
             case InstructionType.Greater:
-                AddInstruction(GasSymbols.GenerateJumpLessEqual(label));
+                GenerateRelOp(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide,
+                    GasSymbols.GenerateSetGreaterToOffset,
+                    GasSymbols.GenerateSetLessToOffset);
                 break;
             case InstructionType.GreaterEqual:
-                AddInstruction(GasSymbols.GenerateJumpLess(label));
+                GenerateRelOp(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide,
+                    GasSymbols.GenerateSetGreaterEqualToOffset,
+                    GasSymbols.GenerateSetLessEqualToOffset);
                 break;
             case InstructionType.Less:
-                AddInstruction(GasSymbols.GenerateJumpGreaterEqual(label));
+                GenerateRelOp(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide,
+                    GasSymbols.GenerateSetLessToOffset,
+                    GasSymbols.GenerateSetGreaterToOffset);
                 break;
             case InstructionType.LessEqual:
-                AddInstruction(GasSymbols.GenerateJumpGreater(label));
+                GenerateRelOp(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide,
+                    GasSymbols.GenerateSetLessEqualToOffset,
+                    GasSymbols.GenerateSetGreaterEqualToOffset);
                 break;
             case InstructionType.And:
-                AddInstruction(GasSymbols.GenerateJumpEqual(label));
+                GenerateAnd(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
                 break;
             case InstructionType.Or:
-                AddInstruction(GasSymbols.GenerateJumpEqual(label));
+                GenerateOr(
+                    intermediateInstruction.FirstOperand,
+                    intermediateInstruction.SecondOperand,
+                    intermediateInstruction.LeftHandSide);
                 break;
+            case InstructionType.NegateInt:
+                GenerateNegate(intermediateInstruction.FirstOperand, intermediateInstruction.LeftHandSide);
+                break;
+            case InstructionType.NegateBool:
+                GenerateNot(intermediateInstruction.FirstOperand, intermediateInstruction.LeftHandSide);
+                break;
+        }
+    }
+
+    private void CompileIfIntermediateInstruction(IfIntermediateInstruction ifIntermediateInstruction)
+    {
+        var cmpInstruction = ifIntermediateInstruction.Condition;
+        var opRegister = cmpInstruction as RegisterTerm;
+        var opBool = cmpInstruction as ConstantBoolTerm;
+        var opFunCall = cmpInstruction as FunctionCallTerm;
+        var offset =
+            opRegister != null ? _registerOffsetMap.GetValueOrDefault(opRegister) : 0;
+
+        if (opRegister != null)
+        {
+            AddInstruction(GasSymbols.GenerateMovzxFromOffset(offset, Register.RAX));
+        }
+
+        if (opBool != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(Convert.ToInt32(opBool.Value), Register.RAX));
+        }
+
+        if (opFunCall != null)
+        {
+            GenerateFunctionCall(opFunCall);
+        }
+
+        AddInstruction(GasSymbols.GenerateTest(Register.RAX, Register.RAX));
+
+        AddInstruction(
+            ifIntermediateInstruction.Negate
+                ? GasSymbols.GenerateJumpEqual(ifIntermediateInstruction.JumpLabel.LabelTerm.Label)
+                : GasSymbols.GenerateJumpNotEqual(ifIntermediateInstruction.JumpLabel.LabelTerm.Label));
+    }
+
+    private void GenerateAssignment(IntermediateInstruction intermediateInstruction)
+    {
+        if (intermediateInstruction.FirstOperand is ConstantIntTerm intTerm)
+        {
+            SaveToVariable(intermediateInstruction.LeftHandSide, intTerm.Value);
+        }
+
+        if (intermediateInstruction.FirstOperand is ConstantBoolTerm boolTerm)
+        {
+            SaveToVariable(intermediateInstruction.LeftHandSide, Convert.ToInt32(boolTerm.Value), true);
+        }
+
+        if (intermediateInstruction.FirstOperand is ConstantStringTerm stringTerm)
+        {
+            var label = _literalsMap[stringTerm.Value];
+            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide];
+            AddInstruction(GasSymbols.GenerateLeaForLiteral(label, Register.RAX));
+            AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.RAX));
+        }
+
+        if (intermediateInstruction.FirstOperand is RegisterTerm registerTerm)
+        {
+            var register = registerTerm.Type == LatteType.Boolean ? Register.AL : Register.RAX;
+            var sourceOffset = _registerOffsetMap[registerTerm];
+            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide];
+            AddInstruction(GasSymbols.GenerateMovFromOffset(sourceOffset, register));
+            AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, register));
         }
     }
 
@@ -424,10 +358,7 @@ public class IntermediateToX86Compiler
         }
 
         var offset = _registerOffsetMap[registerTerm];
-
-        AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
-        AddInstruction(GasSymbols.GenerateIncrement(Register.RAX));
-        AddInstruction(GasSymbols.GenerateMovToOffset(offset, Register.RAX));
+        AddInstruction(GasSymbols.GenerateIncrementToOffset(offset));
     }
 
     private void GenerateDecrement(Term operand)
@@ -438,26 +369,39 @@ public class IntermediateToX86Compiler
         }
 
         var offset = _registerOffsetMap[registerTerm];
-
-        AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
-        AddInstruction(GasSymbols.GenerateDecrement(Register.RAX));
-        AddInstruction(GasSymbols.GenerateMovToOffset(offset, Register.RAX));
+        AddInstruction(GasSymbols.GenerateDecrementToOffset(offset));
     }
 
-    private void GenerateFunctionCall(Term term, RegisterTerm target)
+    private void GenerateFunctionCall(Term term, RegisterTerm target = null)
     {
         if (term is not FunctionCallTerm functionCallTerm)
         {
             throw new Exception();
         }
 
-        var tempRegisters = new List<Register>(_paramRegisters);
+        // From actual registers in which params should be stored
+        var tempRegisters = new List<Register>(GasSymbols.ParamRegisters);
 
-        if (functionCallTerm.Arguments.Count > _paramRegisters.Count)
+        if (functionCallTerm.Arguments.Count > GasSymbols.ParamRegisters.Count)
         {
+            // We fill with dummy registers which symbolize memory
             tempRegisters.AddRange(
                 new List<Register>(
-                    new Register[functionCallTerm.Arguments.Count - _paramRegisters.Count]));
+                    new Register[functionCallTerm.Arguments.Count - GasSymbols.ParamRegisters.Count]));
+        }
+
+        // We count how many elements we have to push on memory - these are from dummy registers
+        var pushesCount = functionCallTerm.Arguments
+            .Zip(tempRegisters)
+            .Count(pair => pair.Second == Register.None);
+
+        // Based on number of pushes we have to do, do we have to push dummy 8 byte word to
+        // align stack?
+        var shouldAlignStack = ((pushesCount * 8) + _stackAlignedTo) % 16 != 0;
+
+        if (shouldAlignStack)
+        {
+            AddInstruction(GasSymbols.GeneratePush(0));
         }
 
         foreach (var (argument, register) in functionCallTerm.Arguments.Zip(tempRegisters))
@@ -486,22 +430,19 @@ public class IntermediateToX86Compiler
                     {
                         AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[stringTerm.Value], register));
                     }
+
                     break;
                 case RegisterTerm registerTerm:
                 {
-                    var offset = _registerOffsetMap[registerTerm];
-                    
+                    var registerOffset = _registerOffsetMap[registerTerm];
+
                     if (registerTerm.Type == LatteType.Boolean)
                     {
-                        AddInstruction(GasSymbols.GenerateMovzxFromOffset(offset, Register.RAX));
-                    }
-                    else if (registerTerm.Type == LatteType.Int)
-                    {
-                        AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
+                        AddInstruction(GasSymbols.GenerateMovzxFromOffset(registerOffset, Register.RAX));
                     }
                     else
                     {
-                        AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
+                        AddInstruction(GasSymbols.GenerateMovFromOffset(registerOffset, Register.RAX));
                     }
 
                     AddInstruction(
@@ -515,56 +456,58 @@ public class IntermediateToX86Compiler
 
         AddInstruction(GasSymbols.GenerateFunctionCall(functionCallTerm.Name));
 
-        if (target != null)
-        {
-            var offset = _registerOffsetMap[target];
+        var toSubtractFromStack = (pushesCount * 8) + (shouldAlignStack ? 8 : 0);
 
-            if (target.Type == LatteType.Boolean)
-            {
-                AddInstruction(GasSymbols.GenerateMovToOffset(offset, Register.AL));
-            }
-            else
-            {
-                AddInstruction(GasSymbols.GenerateMovToOffset(offset, Register.RAX));
-            }
+        if (toSubtractFromStack > 0)
+        {
+            AddInstruction(GasSymbols.GenerateAdd(Register.RSP, toSubtractFromStack));
         }
+
+        if (target == null)
+        {
+            return;
+        }
+
+        var targetOffset = _registerOffsetMap[target];
+
+        AddInstruction(
+            target.Type == LatteType.Boolean
+                ? GasSymbols.GenerateMovToOffset(targetOffset, Register.AL)
+                : GasSymbols.GenerateMovToOffset(targetOffset, Register.RAX));
     }
 
     private void GenerateReturn(Term term)
     {
-        if (term is ConstantIntTerm constantIntTerm)
+        switch (term)
         {
-            AddInstruction(GasSymbols.GenerateMov(constantIntTerm.Value, Register.RAX));
-        }
-
-        if (term is ConstantBoolTerm constantBoolTerm)
-        {
-            AddInstruction(GasSymbols.GenerateMov(Convert.ToInt32(constantBoolTerm.Value), Register.RAX));
-        }
-
-        if (term is RegisterTerm registerTerm)
-        {
-            var offset = _registerOffsetMap[registerTerm];
-
-            if (registerTerm.Type == LatteType.Boolean)
+            case ConstantIntTerm constantIntTerm:
+                AddInstruction(GasSymbols.GenerateMov(constantIntTerm.Value, Register.RAX));
+                break;
+            case ConstantBoolTerm constantBoolTerm:
+                AddInstruction(GasSymbols.GenerateMov(Convert.ToInt32(constantBoolTerm.Value), Register.RAX));
+                break;
+            case RegisterTerm registerTerm:
             {
-                AddInstruction(GasSymbols.GenerateMovzxFromOffset(offset, Register.RAX));
-            }
-            else
-            {
-                AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
+                var offset = _registerOffsetMap[registerTerm];
+
+                AddInstruction(
+                    registerTerm.Type == LatteType.Boolean
+                        ? GasSymbols.GenerateMovzxFromOffset(offset, Register.RAX)
+                        : GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
+                break;
             }
         }
 
-        AddInstruction(GasSymbols.GenerateMov(Register.RBP, Register.RSP));
-        AddInstruction(GasSymbols.GeneratePop(Register.RBP));
-        AddInstruction(GasSymbols.GenerateRet());
+        AddFnEpilog();
     }
 
-    private void GenerateAdd(Term left, Term right, RegisterTerm target)
-    {
-        GenerateBinOp(left, right, target, GasSymbols.GenerateAdd, GasSymbols.GenerateAdd);
-    }
+    private void GenerateAdd(Term left, Term right, RegisterTerm target) =>
+        GenerateBinOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateAdd,
+            GasSymbols.GenerateAdd);
 
     private void GenerateAddStrings(Term left, Term right, RegisterTerm target)
     {
@@ -583,211 +526,164 @@ public class IntermediateToX86Compiler
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RDI));
             AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RSI));
-
-            AddInstruction("CALL _concatStrings");
-
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-            return;
         }
-
-        if (leftRegister != null)
+        else if (leftRegister != null)
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RDI));
             AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[rightString.Value], Register.RSI));
-            
-            AddInstruction("CALL _concatStrings");
-
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-            return;
         }
-
-        if (rightRegister != null)
+        else if (rightRegister != null)
         {
             AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[leftString.Value], Register.RDI));
             AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RSI));
-            
-            AddInstruction("CALL _concatStrings");
+        }
 
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
+        AddInstruction(GasSymbols.GenerateFunctionCall("concatStrings"));
+        AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
+    }
+
+    private void GenerateSubtract(Term left, Term right, RegisterTerm target) =>
+        GenerateBinOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateSubtract,
+            GasSymbols.GenerateSubtract,
+            true);
+
+    private void GenerateMultiply(Term left, Term right, RegisterTerm target) =>
+        GenerateBinOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateMultiply,
+            GasSymbols.GenerateMultiply);
+
+    private void GenerateDivide(Term left, Term right, RegisterTerm target) =>
+        GenerateBinOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateDivide,
+            GasSymbols.GenerateDivide,
+            divide: true);
+
+    private void GenerateModulo(Term left, Term right, RegisterTerm target) =>
+        GenerateBinOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateDivide,
+            GasSymbols.GenerateDivide,
+            modulo: true);
+
+    private void GenerateEqual(Term left, Term right, RegisterTerm target) =>
+        GenerateEqualityComparison(left, right, target, true);
+
+    private void GenerateNotEqual(Term left, Term right, RegisterTerm target) =>
+        GenerateEqualityComparison(left, right, target, false);
+
+    private void GenerateEqualityComparison(Term left, Term right, RegisterTerm target, bool equal)
+    {
+        if (left is not RegisterTerm && right is RegisterTerm)
+        {
+            (left, right) = (right, left);
+        }
+
+        var leftRegister = left as RegisterTerm;
+        var rightRegister = right as RegisterTerm;
+        var rightInt = right as ConstantIntTerm;
+        var rightBool = right as ConstantBoolTerm;
+        var rightString = right as ConstantStringTerm;
+        var leftRegisterOffset =
+            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
+        var rightRegisterOffset =
+            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
+        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
+
+        if (leftRegister != null && rightRegister != null)
+        {
+            var firstRegister = leftRegister.Type == LatteType.Boolean ? Register.AL : Register.RDI;
+            var secondRegister = leftRegister.Type == LatteType.Boolean ? Register.DIL : Register.RSI;
+
+            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, firstRegister));
+            AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, secondRegister));
+
+            if (leftRegister.Type == LatteType.String)
+            {
+                AddInstruction(GasSymbols.GenerateFunctionCall("compareStrings"));
+                AddInstruction(GasSymbols.GenerateTest(Register.RAX, Register.RAX));
+
+                AddInstruction(
+                    equal
+                        ? GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset)
+                        : GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset));
+
+                return;
+            }
+
+            AddInstruction(GasSymbols.GenerateCmp(firstRegister, secondRegister));
+            AddInstruction(
+                equal
+                    ? GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset)
+                    : GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
 
             return;
         }
 
-        if (leftString != null && rightString != null)
+        if (leftRegister == null)
         {
-            AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[leftString.Value], Register.RDI));
+            return;
+        }
+
+        if (leftRegister.Type == LatteType.String)
+        {
+            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RDI));
             AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[rightString.Value], Register.RSI));
-            
-            AddInstruction("CALL _concatStrings");
 
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-            return;
-        }
-
-        throw new Exception();
-    }
-
-    private void GenerateSubtract(Term left, Term right, RegisterTerm target)
-    {
-        GenerateBinOp(left, right, target, GasSymbols.GenerateSubtract, GasSymbols.GenerateSubtract, true);
-    }
-
-    private void GenerateMultiply(Term left, Term right, RegisterTerm target)
-    {
-        GenerateBinOp(left, right, target, GasSymbols.GenerateMultiply, GasSymbols.GenerateMultiply);
-    }
-
-    private void GenerateDivide(Term left, Term right, RegisterTerm target)
-    {
-        GenerateBinOp(left, right, target, GasSymbols.GenerateDivide, GasSymbols.GenerateDivide, divide: true);
-    }
-
-    private void GenerateModulo(Term left, Term right, RegisterTerm target)
-    {
-        GenerateBinOp(left, right, target, GasSymbols.GenerateDivide, GasSymbols.GenerateDivide, modulo: true);
-    }
-
-    private void GenerateEqual(Term left, Term right, RegisterTerm target)
-    {
-        if (left is not RegisterTerm && right is RegisterTerm)
-        {
-            (left, right) = (right, left);
-        }
-        
-        var leftRegister = left as RegisterTerm;
-        var rightRegister = right as RegisterTerm;
-        var rightInt = right as ConstantIntTerm;
-        var rightBool = right as ConstantBoolTerm;
-        var rightString = right as ConstantStringTerm;
-        var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
-        var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
-        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
-    
-        if (leftRegister != null && rightRegister != null)
-        {
-            var firstRegister = leftRegister.Type == LatteType.Boolean ? Register.AL : Register.RDI;
-            var secondRegister = leftRegister.Type == LatteType.Boolean ? Register.DIL : Register.RSI;
-
-            
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, firstRegister));
-            AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, secondRegister));
-            
-            if (leftRegister.Type == LatteType.String)
-            {
-                AddInstruction("CALL _compareStrings");
-                AddInstruction("TEST RAX, RAX");
-                AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-
-                return;
-            }
-    
-            AddInstruction(GasSymbols.GenerateCmp(firstRegister, secondRegister));
-            AddInstruction(GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset));
-    
-            return;
-        }
-    
-        if (leftRegister != null)
-        {
-            if (leftRegister.Type == LatteType.String)
-            {
-                AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RDI));
-                AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[rightString.Value], Register.RSI));
-                
-                AddInstruction("CALL _compareStrings");
-                AddInstruction("TEST RAX, RAX");
-                AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-
-                return;
-            }
-            
-            var register = leftRegister.Type == LatteType.Boolean ? Register.AL : Register.RAX;
-            var value = rightInt?.Value ?? Convert.ToInt32(rightBool.Value);
-            
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, register));
-            AddInstruction(GasSymbols.GenerateCmp(register, value));
-            AddInstruction(GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset));
+            AddInstruction(GasSymbols.GenerateFunctionCall("compareStrings"));
+            AddInstruction(GasSymbols.GenerateTest(Register.RAX, Register.RAX));
+            AddInstruction(
+                equal
+                    ? GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset)
+                    : GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset));
 
             return;
         }
 
-        throw new Exception();
-    }
-    
-    private void GenerateNotEqual(Term left, Term right, RegisterTerm target)
-    {
-        if (left is not RegisterTerm && right is RegisterTerm)
-        {
-            (left, right) = (right, left);
-        }
-        
-        var leftRegister = left as RegisterTerm;
-        var rightRegister = right as RegisterTerm;
-        var rightInt = right as ConstantIntTerm;
-        var rightBool = right as ConstantBoolTerm;
-        var rightString = right as ConstantStringTerm;
-        var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
-        var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
-        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
-    
-        if (leftRegister != null && rightRegister != null)
-        {
-            var firstRegister = leftRegister.Type == LatteType.Boolean ? Register.AL : Register.RDI;
-            var secondRegister = leftRegister.Type == LatteType.Boolean ? Register.DIL : Register.RSI;
-            
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, firstRegister));
-            AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, secondRegister));
-            
-            if (leftRegister.Type == LatteType.String)
-            {
-                AddInstruction("CALL _compareStrings");
-                AddInstruction("TEST RAX, RAX");
-                AddInstruction(GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset));
+        var register = leftRegister.Type == LatteType.Boolean ? Register.AL : Register.RAX;
+        var value = rightInt?.Value ?? Convert.ToInt32(rightBool.Value);
 
-                return;
-            }
-    
-            AddInstruction(GasSymbols.GenerateCmp(firstRegister, secondRegister));
-            AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-    
-            return;
-        }
-    
-        if (leftRegister != null)
-        {
-            if (leftRegister.Type == LatteType.String)
-            {
-                AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RDI));
-                AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[rightString.Value], Register.RSI));
-                
-                AddInstruction("CALL _compareStrings");
-                AddInstruction("TEST RAX, RAX");
-                AddInstruction(GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset));
-
-                return;
-            }
-            
-            var register = leftRegister.Type == LatteType.Boolean ? Register.AL : Register.RAX;
-            var value = rightInt?.Value ?? Convert.ToInt32(rightBool.Value);
-            
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, register));
-            AddInstruction(GasSymbols.GenerateCmp(register, value));
-            AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-
-            return;
-        }
-
-        throw new Exception();
+        AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, register));
+        AddInstruction(GasSymbols.GenerateCmp(register, value));
+        AddInstruction(
+            equal
+                ? GasSymbols.GenerateSetEqualToOffset(targetRegisterOffset)
+                : GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
     }
 
-    private void GenerateOr(Term left, Term right, RegisterTerm target)
+    private void GenerateOr(Term left, Term right, RegisterTerm target) =>
+        GenerateBinaryBoolOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateOr,
+            GasSymbols.GenerateOr);
+
+    private void GenerateAnd(Term left, Term right, RegisterTerm target) =>
+        GenerateBinaryBoolOp(
+            left,
+            right,
+            target,
+            GasSymbols.GenerateAnd,
+            GasSymbols.GenerateAnd);
+
+    private void GenerateBinaryBoolOp(
+        Term left,
+        Term right,
+        RegisterTerm target,
+        Func<Register, Register, string> registerFunc,
+        Func<Register, int, string> registerValueFunc)
     {
         var leftRegister = left as RegisterTerm;
         var rightRegister = right as RegisterTerm;
@@ -798,21 +694,21 @@ public class IntermediateToX86Compiler
         var rightRegisterOffset =
             rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
         var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
-        
+
         if (leftRegister != null && rightRegister != null)
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.AL));
             AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.DIL));
-            AddInstruction(GasSymbols.GenerateOr(Register.AL, Register.DIL));
+            AddInstruction(registerFunc(Register.AL, Register.DIL));
             AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-    
+
             return;
         }
-    
+
         if (leftRegister != null)
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.AL));
-            AddInstruction(GasSymbols.GenerateOr(Register.AL, Convert.ToInt32(rightBool.Value)));
+            AddInstruction(registerValueFunc(Register.AL, Convert.ToInt32(rightBool.Value)));
             AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
 
             return;
@@ -821,56 +717,9 @@ public class IntermediateToX86Compiler
         if (rightRegister != null)
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.AL));
-            AddInstruction(GasSymbols.GenerateOr(Register.AL, Convert.ToInt32(leftBool.Value)));
+            AddInstruction(registerValueFunc(Register.AL, Convert.ToInt32(leftBool.Value)));
             AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-
-            return;
         }
-
-        throw new Exception();
-    }
-    
-    private void GenerateAnd(Term left, Term right, RegisterTerm target)
-    {
-        var leftRegister = left as RegisterTerm;
-        var rightRegister = right as RegisterTerm;
-        var leftBool = left as ConstantBoolTerm;
-        var rightBool = right as ConstantBoolTerm;
-        var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
-        var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
-        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
-        
-        if (leftRegister != null && rightRegister != null)
-        {
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.AL));
-            AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.DIL));
-            AddInstruction(GasSymbols.GenerateAnd(Register.AL, Register.DIL));
-            AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-    
-            return;
-        }
-    
-        if (leftRegister != null)
-        {
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.AL));
-            AddInstruction(GasSymbols.GenerateAnd(Register.AL, Convert.ToInt32(rightBool.Value)));
-            AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-
-            return;
-        }
-
-        if (rightRegister != null)
-        {
-            AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.AL));
-            AddInstruction(GasSymbols.GenerateAnd(Register.AL, Convert.ToInt32(leftBool.Value)));
-            AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-
-            return;
-        }
-
-        throw new Exception();
     }
 
     private void GenerateRelOp(
@@ -889,17 +738,17 @@ public class IntermediateToX86Compiler
         var rightRegisterOffset =
             rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
         var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
-    
+
         if (leftRegister != null && rightRegister != null)
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
             AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RDI));
             AddInstruction(GasSymbols.GenerateCmp(Register.RAX, Register.RDI));
             AddInstruction(generate(targetRegisterOffset));
-    
+
             return;
         }
-    
+
         if (leftRegister != null)
         {
             AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
@@ -914,36 +763,37 @@ public class IntermediateToX86Compiler
             AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RAX));
             AddInstruction(GasSymbols.GenerateCmp(Register.RAX, leftInt.Value));
             AddInstruction(generateReverse(targetRegisterOffset));
-
-            return;
         }
-
-        throw new Exception();
     }
 
     private void GenerateNegate(Term term, RegisterTerm target)
     {
-        if (term is RegisterTerm registerTerm)
+        if (term is not RegisterTerm registerTerm)
         {
-            var offset = _registerOffsetMap[registerTerm];
-            var targetOffset = _registerOffsetMap[target];
-            AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
-            AddInstruction(GasSymbols.GenerateNegation(Register.RAX));
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.RAX));
+            return;
         }
+
+        var offset = _registerOffsetMap[registerTerm];
+        var targetOffset = _registerOffsetMap[target];
+
+        AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
+        AddInstruction(GasSymbols.GenerateNegation(Register.RAX));
+        AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.RAX));
     }
 
     private void GenerateNot(Term term, RegisterTerm target)
     {
-        if (term is RegisterTerm registerTerm)
+        if (term is not RegisterTerm registerTerm)
         {
-            var offset = _registerOffsetMap[registerTerm];
-            var targetOffset = _registerOffsetMap[target];
-            
-            AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.DIL));
-            AddInstruction(GasSymbols.GenerateNot(Register.DIL));
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.DIL));
+            return;
         }
+
+        var offset = _registerOffsetMap[registerTerm];
+        var targetOffset = _registerOffsetMap[target];
+
+        AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.DIL));
+        AddInstruction(GasSymbols.GenerateNot(Register.DIL));
+        AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.DIL));
     }
 
     private void GenerateBinOp(
@@ -1067,41 +917,35 @@ public class IntermediateToX86Compiler
                             ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
                             : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDI));
                 }
-
-                return;
             }
         }
-
-        if (leftInt != null && rightInt != null)
-        {
-            AddInstruction(GasSymbols.GenerateMov(leftInt.Value, Register.RAX));
-            AddInstruction(GasSymbols.GenerateMov(rightInt.Value, Register.RDI));
-            AddInstruction(twoRegisterFun(Register.RAX, Register.RDI));
-
-            AddInstruction(
-                modulo
-                    ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                    : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-            return;
-        }
-
-        throw new Exception();
     }
 
-    private void AddInstruction(string instruction)
-    {
-        _result.Add(instruction);
-    }
+    private void AddInstruction(string instruction) => _result.Add(instruction);
 
     private void AddStringLiteral(string literal)
     {
-        if (!_literalsMap.ContainsKey(literal))
+        if (_literalsMap.ContainsKey(literal))
         {
-            var label = $"str{_literalsMap.Count}";
-            _literalsMap[literal] = label;
-            AddInstruction($"{label}:");
-            AddInstruction($".string \"{literal}\"");
+            return;
         }
+
+        var label = $"str{_literalsMap.Count}";
+        _literalsMap[literal] = label;
+        AddInstruction($"{label}:");
+        AddInstruction($".string \"{literal}\"");
+    }
+
+    private void AddFnProlog()
+    {
+        AddInstruction(GasSymbols.GeneratePush(Register.RBP));
+        AddInstruction(GasSymbols.GenerateMov(Register.RSP, Register.RBP));
+    }
+
+    private void AddFnEpilog()
+    {
+        AddInstruction(GasSymbols.GenerateMov(Register.RBP, Register.RSP));
+        AddInstruction(GasSymbols.GeneratePop(Register.RBP));
+        AddInstruction(GasSymbols.GenerateRet());
     }
 }

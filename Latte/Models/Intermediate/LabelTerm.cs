@@ -8,8 +8,6 @@ public class LabelTerm : Term
     }
 
     public string Label { get; set; }
-    public override List<string> GetStringLiterals()
-    {
-        return new List<string>();
-    }
+
+    public override List<string> GetStringLiterals() => new();
 }

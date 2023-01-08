@@ -7,7 +7,7 @@ using Models;
 using Models.ConstExpression;
 using Scopes;
 
-public class LatteVisitor : LatteBaseVisitor<CompilationResult>
+public class StaticAnalysisVisitor : LatteBaseVisitor<CompilationResult>
 {
     private readonly ParseTreeProperty<IConstExpression> _constantExpressions;
     private readonly List<CompilationError> _errors = new();
@@ -16,7 +16,7 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
     private readonly ParseTreeProperty<LatteType> _types;
     private IScope _currentScope;
 
-    public LatteVisitor(
+    public StaticAnalysisVisitor(
         GlobalScope globals,
         ParseTreeProperty<IScope> scopes,
         ParseTreeProperty<LatteType> types,
@@ -31,7 +31,6 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
     public override CompilationResult VisitProgram(LatteParser.ProgramContext context)
     {
         _currentScope = _globals;
-        Console.WriteLine($"we're in program! {context.GetType()}");
         var result = VisitChildren(context);
 
         result.Errors = _errors;
@@ -54,7 +53,8 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
                 {
                     _errors.Add(
                         new CompilationError(
-                            CompilationErrorType.DuplicateParameterName, parameterNode.Symbol.Line,
+                            CompilationErrorType.DuplicateParameterName,
+                            parameterNode.Symbol.Line,
                             parameterNode.Symbol.Column));
                 }
 
@@ -684,9 +684,8 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
                stmts.OfType<LatteParser.WhileContext>().Any(CodeReturns);
     }
 
-    private bool CodeReturns(ITree context)
-    {
-        return context switch
+    private bool CodeReturns(ITree context) =>
+        context switch
         {
             LatteParser.RetContext => true,
             LatteParser.VRetContext => true,
@@ -695,7 +694,6 @@ public class LatteVisitor : LatteBaseVisitor<CompilationResult>
             LatteParser.CondElseContext x => CodeReturns(x),
             LatteParser.WhileContext x => CodeReturns(x)
         };
-    }
 
     protected override CompilationResult AggregateResult(CompilationResult aggregate, CompilationResult nextResult)
     {

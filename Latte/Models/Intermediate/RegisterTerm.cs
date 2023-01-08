@@ -4,7 +4,12 @@ using Scopes;
 
 public class RegisterTerm : Term
 {
-    public RegisterTerm(string name, LatteType type, string identifier = null, bool isParam = false, IScope scope = null)
+    public RegisterTerm(
+        string name,
+        LatteType type,
+        string identifier = null,
+        bool isParam = false,
+        IScope scope = null)
     {
         Name = name;
         Type = type;
@@ -14,22 +19,16 @@ public class RegisterTerm : Term
     }
 
     public string Name { get; set; }
-    
+
     public string Identifier { get; set; }
-    
+
     public bool IsParam { get; set; }
-    
+
     public LatteType Type { get; set; }
-    
+
     public IScope Scope { get; set; }
 
-    public override string ToString()
-    {
-        return Name;
-    }
+    public override string ToString() => Name;
 
-    public override List<string> GetStringLiterals()
-    {
-        return new List<string>();
-    }
+    public override List<string> GetStringLiterals() => new();
 }

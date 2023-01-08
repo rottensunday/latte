@@ -9,16 +9,10 @@ public class LabelIntermediateInstruction : BaseIntermediateInstruction
     }
 
     public LabelTerm LabelTerm { get; set; }
-    
+
     public bool IsJump { get; set; }
 
-    public override string ToString()
-    {
-        return !IsJump ? $"{LabelTerm.Label}:" : $"jmp {LabelTerm.Label}";
-    }
+    public override string ToString() => !IsJump ? $"{LabelTerm.Label}:" : $"jmp {LabelTerm.Label}";
 
-    public override List<string> GetStringLiterals()
-    {
-        return new List<string>();
-    }
+    public override List<string> GetStringLiterals() => new();
 }

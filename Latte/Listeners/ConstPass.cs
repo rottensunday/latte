@@ -6,43 +6,30 @@ using Models;
 using Models.ConstExpression;
 using Scopes;
 
-public class InlinePass : LatteBaseListener
+public class ConstPass : LatteBaseListener
 {
     private readonly GlobalScope _globals;
     private readonly ParseTreeProperty<IScope> _scopes = new();
     public readonly ParseTreeProperty<IConstExpression> ConstantExpressions = new();
     private IScope _currentScope;
 
-    public InlinePass(GlobalScope globals, ParseTreeProperty<IScope> scopes)
+    public ConstPass(GlobalScope globals, ParseTreeProperty<IScope> scopes)
     {
         _globals = globals;
         _scopes = scopes;
     }
 
-    public override void EnterProgram(LatteParser.ProgramContext context)
-    {
-        _currentScope = _globals;
-    }
+    public override void EnterProgram(LatteParser.ProgramContext context) => _currentScope = _globals;
 
-    public override void EnterTopDef(LatteParser.TopDefContext context)
-    {
-        _currentScope = _scopes.Get(context);
-    }
+    public override void EnterTopDef(LatteParser.TopDefContext context) => _currentScope = _scopes.Get(context);
 
-    public override void ExitTopDef(LatteParser.TopDefContext context)
-    {
+    public override void ExitTopDef(LatteParser.TopDefContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
-    }
 
-    public override void EnterBlock(LatteParser.BlockContext context)
-    {
-        _currentScope = _scopes.Get(context);
-    }
+    public override void EnterBlock(LatteParser.BlockContext context) => _currentScope = _scopes.Get(context);
 
-    public override void ExitBlock(LatteParser.BlockContext context)
-    {
+    public override void ExitBlock(LatteParser.BlockContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
-    }
 
     public override void ExitEAnd(LatteParser.EAndContext context)
     {
@@ -70,25 +57,21 @@ public class InlinePass : LatteBaseListener
         }
     }
 
-    public override void ExitEInt(LatteParser.EIntContext context)
-    {
-        ConstantExpressions.Put(context, new ConstExpression<int>(Int32.Parse(context.GetText())));
-    }
+    public override void ExitEInt(LatteParser.EIntContext context) =>
+        ConstantExpressions.Put(
+            context,
+            new ConstExpression<int>(Int32.Parse(context.GetText())));
 
-    public override void ExitETrue(LatteParser.ETrueContext context)
-    {
+    public override void ExitETrue(LatteParser.ETrueContext context) =>
         ConstantExpressions.Put(context, new ConstExpression<bool>(true));
-    }
 
-    public override void ExitEFalse(LatteParser.EFalseContext context)
-    {
+    public override void ExitEFalse(LatteParser.EFalseContext context) =>
         ConstantExpressions.Put(context, new ConstExpression<bool>(false));
-    }
 
-    public override void ExitEStr(LatteParser.EStrContext context)
-    {
-        ConstantExpressions.Put(context, new ConstExpression<string>(context.GetText()[1..^1]));
-    }
+    public override void ExitEStr(LatteParser.EStrContext context) =>
+        ConstantExpressions.Put(
+            context,
+            new ConstExpression<string>(context.GetText()[1..^1]));
 
     public override void ExitEParen(LatteParser.EParenContext context)
     {

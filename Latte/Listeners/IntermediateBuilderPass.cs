@@ -10,47 +10,35 @@ using Scopes;
 
 public class IntermediateBuilderPass : LatteBaseListener
 {
-    private readonly ParseTreeProperty<IConstExpression> _constantExpressions;
-    private IScope _currentScope;
-    private readonly Stack<LatteParser.StmtContext> _elseStmtsStack = new();
-    private readonly GlobalScope _globals;
-    private readonly Stack<LatteParser.ExprContext> _ifCondsStack = new();
-    private readonly Stack<IfIntermediateInstruction> _ifsStack = new();
-    private readonly ParseTreeProperty<bool> _isAndOperand = new();
-    private readonly ParseTreeProperty<bool> _isOrOperand = new();
-    private readonly Stack<InstructionType> _opsStack = new();
-    private readonly ParseTreeProperty<IScope> _scopes;
-    private readonly Stack<Term> _termsStack = new();
-    private readonly ParseTreeProperty<LatteType> _types;
-    private readonly Stack<LabelIntermediateInstruction> _whileBeginStack = new();
-    public readonly List<IntermediateFunction> IntermediateFunctions = new();
-    private Stack<LabelIntermediateInstruction> _andFailureCases = new();
-    private LabelIntermediateInstruction _andJump;
-
-    private Stack<LabelIntermediateInstruction> _andSuccessCases = new();
     private readonly ParseTreeProperty<LatteParser.ExprContext> _boolExprParent = new();
 
     private readonly ParseTreeProperty<LatteParser.ExprContext> _condParent = new();
-    private IntermediateFunction _currentFunction;
-    private int _currentLabel;
+    private readonly ParseTreeProperty<IConstExpression> _constantExpressions;
+    private readonly GlobalScope _globals;
+    private readonly ParseTreeProperty<bool> _isAndOperand = new();
+    private readonly ParseTreeProperty<bool> _isOrOperand = new();
 
     private readonly ParseTreeProperty<bool> _negateContext = new();
-    private LabelIntermediateInstruction _orFailJump;
-    private Stack<LabelIntermediateInstruction> _orFailureCases = new();
-    private Stack<LabelIntermediateInstruction> _orSuccessCases = new();
-    private LabelIntermediateInstruction _orSuccessJump;
-    private ParseTreeProperty<LabelIntermediateInstruction> _toAddJumpsEnter = new();
-    private ParseTreeProperty<LabelIntermediateInstruction> _toAddJumpsExit = new();
+    private readonly Stack<InstructionType> _opsStack = new();
+    private readonly ParseTreeProperty<IScope> _scopes;
+    private readonly Stack<Term> _termsStack = new();
 
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toAddLabelsEnter = new();
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toAddLabelsExit = new();
-
+    private readonly ParseTreeProperty<LabelIntermediateInstruction> _toHandleCond = new();
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toJumpAfterLabels = new();
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toJumpBodyLabels = new();
-    
+
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toJumpEndElseLabels = new();
-    
-    private readonly ParseTreeProperty<LabelIntermediateInstruction> _toHandleCond = new();
+    private readonly ParseTreeProperty<LatteType> _types;
+    public readonly List<IntermediateFunction> IntermediateFunctions = new();
+    private LabelIntermediateInstruction _andJump;
+
+    private IntermediateFunction _currentFunction;
+    private int _currentLabel;
+    private IScope _currentScope;
+    private LabelIntermediateInstruction _orFailJump;
+    private LabelIntermediateInstruction _orSuccessJump;
 
 
     public IntermediateBuilderPass(
@@ -65,10 +53,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         _constantExpressions = constantExpressions;
     }
 
-    public override void EnterProgram(LatteParser.ProgramContext context)
-    {
-        _currentScope = _globals;
-    }
+    public override void EnterProgram(LatteParser.ProgramContext context) => _currentScope = _globals;
 
     public override void EnterTopDef(LatteParser.TopDefContext context)
     {
@@ -79,7 +64,8 @@ public class IntermediateBuilderPass : LatteBaseListener
 
         foreach (var kvp in arguments)
         {
-            _currentFunction.Variables.Add(_currentFunction.GetNextRegister(kvp.Value.LatteType, kvp.Key, true, _currentScope));
+            _currentFunction.Variables.Add(
+                _currentFunction.GetNextRegister(kvp.Value.LatteType, kvp.Key, true, _currentScope));
         }
     }
 
@@ -92,28 +78,6 @@ public class IntermediateBuilderPass : LatteBaseListener
 
         for (var i = 0; i < instructions.Count; i++)
         {
-            // if (i > 0
-            //     && instructions[i - 1] is IntermediateInstruction previous
-            //     && instructions[i] is IntermediateInstruction current)
-            // {
-            //     if (current.FirstOperand is RegisterTerm register
-            //         && current.SecondOperand == null
-            //         && current.InstructionType == InstructionType.Assignment // make sure it makes sense
-            //         && previous.LeftHandSide.Identifier != null
-            //         && previous.LeftHandSide.Identifier == register.Identifier)
-            //     {
-            //         previous.LeftHandSide = current.LeftHandSide;
-            //     }
-            //     else
-            //     {
-            //         newInstructions.Add(instructions[i]);
-            //     }
-            // }
-            // else
-            // {
-            //     newInstructions.Add(instructions[i]);
-            // }
-            
             newInstructions.Add(instructions[i]);
         }
 
@@ -195,16 +159,11 @@ public class IntermediateBuilderPass : LatteBaseListener
 
         IntermediateFunctions.Add(_currentFunction);
     }
-    
-    public override void EnterBlock(LatteParser.BlockContext context)
-    {
-        _currentScope = _scopes.Get(context);
-    }
 
-    public override void ExitBlock(LatteParser.BlockContext context)
-    {
+    public override void EnterBlock(LatteParser.BlockContext context) => _currentScope = _scopes.Get(context);
+
+    public override void ExitBlock(LatteParser.BlockContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
-    }
 
     public override void EnterEAddOp(LatteParser.EAddOpContext context)
     {
@@ -273,7 +232,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     {
         var identifier = context.ID().Symbol.Text;
 
-        if (!_currentFunction.TryGetVariable(identifier, _currentScope ,out var registerTerm))
+        if (!_currentFunction.TryGetVariable(identifier, _currentScope, out var registerTerm))
         {
             throw new Exception("No variable to increment");
         }
@@ -290,7 +249,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     {
         var identifier = context.ID().Symbol.Text;
 
-        if (!_currentFunction.TryGetVariable(identifier, _currentScope ,out var registerTerm))
+        if (!_currentFunction.TryGetVariable(identifier, _currentScope, out var registerTerm))
         {
             throw new Exception("No variable to decrement");
         }
@@ -352,7 +311,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         if (isMinus)
         {
             var value = _termsStack.Pop();
-            
+
             if (value is ConstantIntTerm x)
             {
                 _termsStack.Push(new ConstantIntTerm(-x.Value));
@@ -391,23 +350,6 @@ public class IntermediateBuilderPass : LatteBaseListener
                     instructionType,
                     null));
         }
-        // else
-        // {
-        //     if (_isAndOperand.Get(context))
-        //     {
-        //         _currentFunction.Instructions.Add(new IfIntermediateInstruction(
-        //             value,
-        //             _toJumpAfterLabels.Get(context)));
-        //     }
-        //
-        //     if (_isOrOperand.Get(context))
-        //     {
-        //         _currentFunction.Instructions.Add(new IfIntermediateInstruction(
-        //             value,
-        //             _toJumpBodyLabels.Get(context),
-        //             negate: true));
-        //     }
-        // }
     }
 
     public override void EnterEAnd(LatteParser.EAndContext context)
@@ -438,9 +380,6 @@ public class IntermediateBuilderPass : LatteBaseListener
 
             _toJumpBodyLabels.Put(context, GetNextLabel());
             _toJumpAfterLabels.Put(context, GetNextLabel());
-
-            // _toAddLabelsEnter.Put(context.stmt(), enterLabel);
-            // _toAddLabelsExit.Put(context.stmt(), exitLabel);
         }
 
         var bodyLabel = _toJumpBodyLabels.Get(context);
@@ -586,9 +525,6 @@ public class IntermediateBuilderPass : LatteBaseListener
 
             _toJumpBodyLabels.Put(context, GetNextLabel());
             _toJumpAfterLabels.Put(context, GetNextLabel());
-
-            // _toAddLabelsEnter.Put(context.stmt(), enterLabel);
-            // _toAddLabelsExit.Put(context.stmt(), exitLabel);
         }
 
         var bodyLabel = _toJumpBodyLabels.Get(context);
@@ -601,11 +537,6 @@ public class IntermediateBuilderPass : LatteBaseListener
             newAfterLabel = GetNextLabel();
             _toAddLabelsEnter.Put(right, newAfterLabel);
         }
-
-        // _toJumpBodyLabels.Put(left, bodyLabel);
-        // _toJumpBodyLabels.Put(right, bodyLabel);
-        // _toJumpAfterLabels.Put(left, newAfterLabel);
-        // _toJumpAfterLabels.Put(right, afterLabel);
 
         if (_negateContext.Get(context))
         {
@@ -742,11 +673,8 @@ public class IntermediateBuilderPass : LatteBaseListener
                     negate: _negateContext.Get(context)));
         }
 
-        // else
-        // {
         var term = new ConstantBoolTerm(true);
         _termsStack.Push(term);
-        // }
     }
 
     public override void EnterEFalse(LatteParser.EFalseContext context)
@@ -768,11 +696,8 @@ public class IntermediateBuilderPass : LatteBaseListener
                     negate: _negateContext.Get(context)));
         }
 
-        // else
-        // {
         var term = new ConstantBoolTerm(false);
         _termsStack.Push(term);
-        // }
     }
 
     public override void EnterEId(LatteParser.EIdContext context)
@@ -799,10 +724,7 @@ public class IntermediateBuilderPass : LatteBaseListener
                         negate: _negateContext.Get(context)));
             }
 
-            // else
-            // {
             _termsStack.Push(variableRegister);
-            // }
 
             return;
         }
@@ -987,33 +909,10 @@ public class IntermediateBuilderPass : LatteBaseListener
     public override void ExitAss(LatteParser.AssContext context)
     {
         var rhsType = _types.Get(context.expr());
-        // var rightConst = _constantExpressions.Get(context.expr());
-        // Term rhs = null;
-        //
-        // if (rightConst != null)
-        // {
-        //     if (rightConst is ConstExpression<int> constInt)
-        //     {
-        //         rhs = new ConstantIntTerm(constInt.Value);
-        //     }
-        //
-        //     if (rightConst is ConstExpression<string> constString)
-        //     {
-        //         rhs = new ConstantStringTerm(constString.Value);
-        //     }
-        //
-        //     if (rightConst is ConstExpression<bool> constBool)
-        //     {
-        //         rhs = new ConstantBoolTerm(constBool.Value);
-        //     }
-        // }
 
         var lhs = context.ID().Symbol.Text;
 
-        // if (rhs == null)
-        // {
         var rhs = _termsStack.Pop();
-        // }
 
         if (_currentFunction.TryGetVariable(lhs, _currentScope, out var variableRegister))
         {
@@ -1102,33 +1001,16 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void EnterCond(LatteParser.CondContext context)
     {
-        // var label = GetNextLabel();
-        // var cond = new IntermediateInstruction(null, null, InstructionType.And, null);
-        // var ifInstruction = new IfIntermediateInstruction(cond, label);
-        // _ifsStack.Push(ifInstruction);
-        // _ifCondsStack.Push(context.expr());
         var enterLabel = GetNextLabel();
         var exitLabel = GetNextLabel();
 
-        // if (GetInnerContext(context.expr()) is LatteParser.EAndContext or LatteParser.EOrContext)
-        // {
         _toAddLabelsEnter.Put(context.stmt(), enterLabel);
         _toAddLabelsExit.Put(context.stmt(), exitLabel);
-        // _toAddJumpsEnter
         _toJumpBodyLabels.Put(context.expr(), enterLabel);
         _toJumpAfterLabels.Put(context.expr(), exitLabel);
-        // }
 
         _toHandleCond.Put(context.stmt(), exitLabel);
         _condParent.Put(context.expr(), context.expr());
-    }
-
-    public override void ExitCond(LatteParser.CondContext context)
-    {
-        // var ifInstruction = _ifsStack.Pop();
-        // _currentFunction.Instructions.Add(ifInstruction.JumpLabel);
-        // _currentFunction.Instructions.Add(_andJump);
-        // _currentFunction.Instructions.Add(_orFailJump);
     }
 
     public override void EnterCondElse(LatteParser.CondElseContext context)
@@ -1146,22 +1028,6 @@ public class IntermediateBuilderPass : LatteBaseListener
 
         _toHandleCond.Put(context.stmt()[0], exitLabel);
         _condParent.Put(context.expr(), context.expr());
-        
-        // _elseStmtsStack.Push(context.stmt()[0]);
-        // var elseLabel = GetNextLabel();
-        // var endLabel = GetNextLabel();
-        // var cond = new IntermediateInstruction(null, null, InstructionType.And, null);
-        //
-        // var ifInstruction = new IfIntermediateInstruction(cond, elseLabel, endLabel);
-        // _ifsStack.Push(ifInstruction);
-        // _ifCondsStack.Push(context.expr());
-    }
-
-    public override void ExitCondElse(LatteParser.CondElseContext context)
-    {
-        // var ifInstruction = _ifsStack.Pop();
-        // _currentFunction.Instructions.Add(ifInstruction.IfElseEndLabel);
-        // _currentFunction.Instructions.Add(_andJump);
     }
 
     public override void EnterWhile(LatteParser.WhileContext context)
@@ -1174,34 +1040,13 @@ public class IntermediateBuilderPass : LatteBaseListener
         _toAddLabelsEnter.Put(context.expr(), startLabel);
         _toAddLabelsEnter.Put(context.stmt(), bodyLabel);
         _toAddLabelsExit.Put(context.stmt(), exitLabel);
-        // _toAddLabelsExit.Put(context.stmt()[1], exitElseLabel);
         _toJumpEndElseLabels.Put(context.stmt(), startLabel);
         _toJumpBodyLabels.Put(context.expr(), bodyLabel);
         _toJumpAfterLabels.Put(context.expr(), exitElseLabel);
 
         _toHandleCond.Put(context.stmt(), exitLabel);
         _condParent.Put(context.expr(), context.expr());
-        
-        // var label = GetNextLabel();
-        //
-        // _currentFunction.Instructions.Add(label);
-        // _whileBeginStack.Push(label);
-        //
-        // var exitLabel = GetNextLabel();
-        // var cond = new IntermediateInstruction(null, null, InstructionType.And, null);
-        // var ifInstruction = new IfIntermediateInstruction(cond, exitLabel);
-        // _ifsStack.Push(ifInstruction);
-        // _ifCondsStack.Push(context.expr());
     }
-    //
-    // public override void ExitWhile(LatteParser.WhileContext context)
-    // {
-    //     var goToBeginningLabel = _whileBeginStack.Pop();
-    //     var labelCopy = new LabelIntermediateInstruction(goToBeginningLabel.LabelTerm, true);
-    //     _currentFunction.Instructions.Add(labelCopy);
-    //     var ifInstruction = _ifsStack.Pop();
-    //     _currentFunction.Instructions.Add(ifInstruction.JumpLabel);
-    // }
 
     public override void EnterEveryRule(ParserRuleContext context)
     {
@@ -1234,74 +1079,13 @@ public class IntermediateBuilderPass : LatteBaseListener
         {
             _currentFunction.Instructions.Add(new LabelIntermediateInstruction(endElseLabel.LabelTerm, true));
         }
-        
+
         var exitLabel = _toAddLabelsExit.Get(context);
 
         if (exitLabel != null)
         {
             _currentFunction.Instructions.Add(exitLabel);
         }
-
-        // if (_ifCondsStack.Count > 0)
-        // {
-        //     // if (context == _ifCondsStack.Peek())
-        //     // {
-        //     //     _ifCondsStack.Pop();
-        //     //     _currentFunction.Instructions.Add(_orSuccessJump);
-        //     // }
-        //     
-        // }
-        // if (_ifCondsStack.Count > 0)
-        // {
-        //     var expr = _ifCondsStack.Peek();
-        //
-        //     if (context == expr)
-        //     {
-        //         _ifCondsStack.Pop();
-        //         var ifCondInstruction = _ifsStack.Peek();
-        //
-        //         if (_termsStack.Count > 0 && _termsStack.Peek() is ConstantBoolTerm constBool)
-        //         {
-        //             ifCondInstruction.Condition = new IntermediateInstruction(
-        //                 null, constBool, InstructionType.None, null);
-        //         }
-        //         else if (expr is LatteParser.EIdContext && _termsStack.Count > 0 &&
-        //                  _termsStack.Peek() is RegisterTerm registerTerm)
-        //         {
-        //             ifCondInstruction.Condition = new IntermediateInstruction(
-        //                 null, registerTerm, InstructionType.None, null);
-        //         }
-        //         else if (expr is LatteParser.EFunCallContext && _termsStack.Count > 0 &&
-        //                  _termsStack.Peek() is RegisterTerm registerTermFunc)
-        //         {
-        //             ifCondInstruction.Condition = new IntermediateInstruction(
-        //                 null, registerTermFunc, InstructionType.None, null);
-        //         }
-        //         else
-        //         {
-        //             ifCondInstruction.Condition =
-        //                 (IntermediateInstruction)_currentFunction.Instructions.Last();
-        //             _currentFunction.Instructions.RemoveAt(_currentFunction.Instructions.Count - 1);
-        //         }
-        //
-        //         _currentFunction.Instructions.Add(ifCondInstruction);
-        //     }
-        // }
-
-        // if (_elseStmtsStack.Count > 0)
-        // {
-        //     var stmt = _elseStmtsStack.Peek();
-        //
-        //     if (context == stmt)
-        //     {
-        //         _elseStmtsStack.Pop();
-        //         var ifCondInstruction = _ifsStack.Peek();
-        //
-        //         _currentFunction.Instructions.Add(
-        //             new LabelIntermediateInstruction(ifCondInstruction.IfElseEndLabel.LabelTerm, true));
-        //         _currentFunction.Instructions.Add(ifCondInstruction.JumpLabel);
-        //     }
-        // }
     }
 
     public override void EnterEParen(LatteParser.EParenContext context)
@@ -1342,10 +1126,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         }
     }
 
-    private LabelIntermediateInstruction GetNextLabel()
-    {
-        return new LabelIntermediateInstruction(new LabelTerm($"l{_currentLabel++}"));
-    }
+    private LabelIntermediateInstruction GetNextLabel() => new(new LabelTerm($"l{_currentLabel++}"));
 
     private LatteParser.ExprContext GetInnerContext(LatteParser.ExprContext context)
     {

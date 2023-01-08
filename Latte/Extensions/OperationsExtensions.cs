@@ -4,28 +4,23 @@ using Models;
 
 public static class OperationsExtensions
 {
-    public static AddOpType GetOpType(this LatteParser.AddOpContext context)
-    {
-        return context.GetText() switch
+    public static AddOpType GetOpType(this LatteParser.AddOpContext context) =>
+        context.GetText() switch
         {
             "+" => AddOpType.Plus,
             "-" => AddOpType.Minus
         };
-    }
 
-    public static MulOpType GetOpType(this LatteParser.MulOpContext context)
-    {
-        return context.GetText() switch
+    public static MulOpType GetOpType(this LatteParser.MulOpContext context) =>
+        context.GetText() switch
         {
             "*" => MulOpType.Multiply,
             "/" => MulOpType.Divide,
             "%" => MulOpType.Modulo
         };
-    }
 
-    public static RelOpType GetOpType(this LatteParser.RelOpContext context)
-    {
-        return context.GetText() switch
+    public static RelOpType GetOpType(this LatteParser.RelOpContext context) =>
+        context.GetText() switch
         {
             "<" => RelOpType.Less,
             "<=" => RelOpType.LessEqual,
@@ -34,14 +29,11 @@ public static class OperationsExtensions
             "==" => RelOpType.Equal,
             "!=" => RelOpType.NotEqual
         };
-    }
 
-    public static UnaryOpType GetOpType(this LatteParser.EUnOpContext context)
-    {
-        return context.Start.Text switch
+    public static UnaryOpType GetOpType(this LatteParser.EUnOpContext context) =>
+        context.Start.Text switch
         {
             "-" => UnaryOpType.Minus,
             "!" => UnaryOpType.Negation
         };
-    }
 }

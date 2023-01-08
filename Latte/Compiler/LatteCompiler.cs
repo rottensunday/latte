@@ -30,17 +30,16 @@ public static class LatteCompiler
             var typesPass = new TypesPass(symbolTablePass.Globals, symbolTablePass.Scopes);
             walker.Walk(typesPass, tree);
 
-            var constantsPass = new InlinePass(symbolTablePass.Globals, symbolTablePass.Scopes);
+            var constantsPass = new ConstPass(symbolTablePass.Globals, symbolTablePass.Scopes);
             walker.Walk(constantsPass, tree);
 
             var intermediatePass = new IntermediateBuilderPass(
-                symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types, constantsPass.ConstantExpressions);
+                symbolTablePass.Globals,
+                symbolTablePass.Scopes,
+                typesPass.Types,
+                constantsPass.ConstantExpressions);
             walker.Walk(intermediatePass, tree);
 
-            // var intermediatePass = new IntermediateBuilderPassVisitor(
-            //     symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types, constantsPass.ConstantExpressions);
-            // intermediatePass.VisitProgram(tree);
-            
             Console.WriteLine("INTERMEDIATE REPRESENTATION:");
             Console.WriteLine("-----------------------------");
 
@@ -52,16 +51,19 @@ public static class LatteCompiler
                 {
                     Console.WriteLine(instruction);
                 }
-                
+
                 Console.WriteLine();
             }
-            
+
             Console.WriteLine("-----------------------------");
 
-            var testVisitor = new LatteVisitor(
-                symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types, constantsPass.ConstantExpressions);
-            var result = testVisitor.VisitProgram(tree);
-            
+            var staticAnalysisVisitor = new StaticAnalysisVisitor(
+                symbolTablePass.Globals,
+                symbolTablePass.Scopes,
+                typesPass.Types,
+                constantsPass.ConstantExpressions);
+            var result = staticAnalysisVisitor.VisitProgram(tree);
+
             result.WriteErrors();
 
             if (!result.Success)
@@ -69,22 +71,15 @@ public static class LatteCompiler
                 return new CompileResult(ParsingResultType.Ok, new CompilationResult(result.Errors));
             }
 
-            // var generatingVisitor = new LatteVisitorGenerator(
-            //     symbolTablePass.Globals, symbolTablePass.Scopes, typesPass.Types,
-            //     constantsPass.ConstantExpressions);
-            //
-            // generatingVisitor.VisitProgram(tree);
-
             var instructions = new List<string>();
             var compiler = new IntermediateToX86Compiler();
-            
-            instructions.Add(GasSymbols.Prefix);
 
+            instructions.Add(GasSymbols.Prefix);
             instructions.AddRange(compiler.Compile(intermediatePass.IntermediateFunctions));
-            
 
             return new CompileResult(
-                ParsingResultType.Ok, new CompilationResult(null, instructions));
+                ParsingResultType.Ok,
+                new CompilationResult(null, instructions));
         }
 
         Console.WriteLine("Syntax errors in code; unable to generate");

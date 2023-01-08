@@ -17,15 +17,9 @@ public class FunctionSymbol : Symbol, IScope
 
     public List<Symbol> ArgumentsList => Arguments.Select(x => x.Value).ToList();
 
-    public string GetScopeName()
-    {
-        return Name;
-    }
+    public string GetScopeName() => Name;
 
-    public IScope GetEnclosingScope()
-    {
-        return _enclosingScope;
-    }
+    public IScope GetEnclosingScope() => _enclosingScope;
 
     public void Define(Symbol sym)
     {
@@ -45,10 +39,7 @@ public class FunctionSymbol : Symbol, IScope
         return enclosingScope != null ? enclosingScope.Resolve(name) : null;
     }
 
-    public Symbol ResolveFlat(string name)
-    {
-        return Arguments.TryGetValue(name, out var symbol) ? symbol : null;
-    }
+    public Symbol ResolveFlat(string name) => Arguments.TryGetValue(name, out var symbol) ? symbol : null;
 
     public FunctionSymbol GetEnclosingFunction()
     {
@@ -62,8 +53,5 @@ public class FunctionSymbol : Symbol, IScope
         return enclosingScope as FunctionSymbol;
     }
 
-    public override string ToString()
-    {
-        return $"function {base.ToString()} : {string.Join(", ", Arguments.Values)}";
-    }
+    public override string ToString() => $"function {base.ToString()} : {string.Join(", ", Arguments.Values)}";
 }

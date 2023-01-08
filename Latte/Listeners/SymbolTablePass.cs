@@ -20,12 +20,16 @@ public class SymbolTablePass : LatteBaseListener
 
         CurrentScope.Define(
             new FunctionSymbol(
-                "printInt", LatteType.Void, CurrentScope,
+                "printInt",
+                LatteType.Void,
+                CurrentScope,
                 new Dictionary<string, Symbol> { [""] = new("", LatteType.Int) }));
 
         CurrentScope.Define(
             new FunctionSymbol(
-                "printString", LatteType.Void, CurrentScope,
+                "printString",
+                LatteType.Void,
+                CurrentScope,
                 new Dictionary<string, Symbol> { [""] = new("", LatteType.String) }));
 
         CurrentScope.Define(
@@ -36,11 +40,6 @@ public class SymbolTablePass : LatteBaseListener
 
         CurrentScope.Define(
             new FunctionSymbol("readString", LatteType.String, CurrentScope));
-    }
-
-    public override void ExitProgram(LatteParser.ProgramContext context)
-    {
-        Console.WriteLine(Globals);
     }
 
     public override void EnterTopDef(LatteParser.TopDefContext context)
@@ -55,11 +54,8 @@ public class SymbolTablePass : LatteBaseListener
         CurrentScope = functionSymbol;
     }
 
-    public override void ExitTopDef(LatteParser.TopDefContext context)
-    {
-        Console.WriteLine(CurrentScope);
+    public override void ExitTopDef(LatteParser.TopDefContext context) =>
         CurrentScope = CurrentScope.GetEnclosingScope();
-    }
 
     public override void EnterBlock(LatteParser.BlockContext context)
     {
@@ -67,11 +63,7 @@ public class SymbolTablePass : LatteBaseListener
         SaveScope(context, CurrentScope);
     }
 
-    public override void ExitBlock(LatteParser.BlockContext context)
-    {
-        Console.WriteLine(CurrentScope);
-        CurrentScope = CurrentScope.GetEnclosingScope();
-    }
+    public override void ExitBlock(LatteParser.BlockContext context) => CurrentScope = CurrentScope.GetEnclosingScope();
 
     public override void ExitArg(LatteParser.ArgContext context)
     {
@@ -117,7 +109,7 @@ public class SymbolTablePass : LatteBaseListener
                 LatteParser.AssDeclContext assDeclContext => assDeclContext.ID().GetText(),
                 _ => null
             });
-        
+
         foreach (var name in itemIds)
         {
             DefineVar(name, type, context.Start);
@@ -141,8 +133,5 @@ public class SymbolTablePass : LatteBaseListener
         CurrentScope.Define(variableSymbol);
     }
 
-    private void SaveScope(IParseTree ctx, IScope scope)
-    {
-        Scopes.Put(ctx, scope);
-    }
+    private void SaveScope(IParseTree ctx, IScope scope) => Scopes.Put(ctx, scope);
 }

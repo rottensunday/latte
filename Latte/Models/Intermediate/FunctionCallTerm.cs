@@ -11,7 +11,7 @@ public class FunctionCallTerm : Term
     }
 
     public string Name { get; set; }
-    
+
     public List<Term> Arguments { get; set; }
 
     public override string ToString()
@@ -42,8 +42,5 @@ public class FunctionCallTerm : Term
         return builder.ToString();
     }
 
-    public override List<string> GetStringLiterals()
-    {
-        return Arguments.SelectMany(x => x.GetStringLiterals()).ToList();
-    }
+    public override List<string> GetStringLiterals() => Arguments.SelectMany(x => x.GetStringLiterals()).ToList();
 }

@@ -1,0 +1,76 @@
+int main() {
+  f(
+    false,
+    2,
+    "3",
+    4,
+    true,
+    6,
+    7,
+    "8",
+    "9",
+    10,
+    false,
+    "12",
+    13,
+    true
+  );
+  
+  return 0;
+}
+
+int f(boolean x1, int x2, string x3, int x4, boolean x5, int x6, int x7, string x8, string x9, int x10, boolean x11, string x12, int x13, boolean go) {
+    printBoolean(x1);
+    printInt(x2);
+    printString(x3);
+    printInt(x4);
+    printBoolean(x5);
+    printInt(x6);
+    printInt(x7);
+    printString(x8);
+    printString(x9);
+    printInt(x10);
+    printBoolean(x11);
+    printString(x12);
+    printInt(x13);
+    
+    if (go) {
+        f(
+            false,
+            2,
+            "3",
+            4,
+            true,
+            6,
+            7,
+            "8",
+            "9",
+            10,
+            false,
+            "12",
+            13,
+            false
+        );
+    }
+    
+    printBoolean(x1);
+    printInt(x2);
+    printString(x3);
+    printInt(x4);
+    printBoolean(x5);
+    printInt(x6);
+    printInt(x7);
+    printString(x8);
+    printString(x9);
+    printInt(x10);
+    printBoolean(x11);
+    printString(x12);
+    printInt(x13);
+    
+    return 0;
+}
+
+void printBoolean(boolean x) {
+    if (x) printString("TRUE");
+    else printString("FALSE");
+}

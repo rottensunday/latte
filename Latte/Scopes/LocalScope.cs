@@ -6,8 +6,5 @@ public class LocalScope : BaseScope
     {
     }
 
-    public override string GetScopeName()
-    {
-        return "locals";
-    }
+    public override string GetScopeName() => "locals";
 }

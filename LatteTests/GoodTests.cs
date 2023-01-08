@@ -18,7 +18,7 @@ public class GoodTests
 
         Assert.AreEqual(ParsingResultType.Ok, result.ParsingResultType);
         Assert.IsTrue(result.CompilationResult.Success);
-        
+
         Assert.AreEqual(properOutput, output);
     }
 }

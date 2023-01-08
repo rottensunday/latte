@@ -6,8 +6,5 @@ public class GlobalScope : BaseScope
     {
     }
 
-    public override string GetScopeName()
-    {
-        return "globals";
-    }
+    public override string GetScopeName() => "globals";
 }

@@ -4,9 +4,8 @@ using Scopes;
 
 public static class TypesHelper
 {
-    public static LatteType TryGetLatteType(string type)
-    {
-        return type switch
+    public static LatteType TryGetLatteType(string type) =>
+        type switch
         {
             "boolean" => LatteType.Boolean,
             "int" => LatteType.Int,
@@ -14,5 +13,4 @@ public static class TypesHelper
             "void" => LatteType.Void,
             _ => LatteType.Invalid
         };
-    }
 }

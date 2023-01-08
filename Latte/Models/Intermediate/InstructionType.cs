@@ -26,14 +26,3 @@ public enum InstructionType
     FunctionCall,
     Jump
 }
-
-// public static class InstructionTypeExtensions
-// {
-//     public static InstructionType Negate(this InstructionType instructionType)
-//     {
-//         return instructionType switch
-//         {
-//             InstructionType.And => 
-//         };
-//     }
-// }

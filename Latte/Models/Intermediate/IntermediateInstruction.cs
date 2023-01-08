@@ -22,9 +22,8 @@ public class IntermediateInstruction : BaseIntermediateInstruction
 
     public Term SecondOperand { get; set; }
 
-    public override string ToString()
-    {
-        return InstructionType switch
+    public override string ToString() =>
+        InstructionType switch
         {
             InstructionType.And => $"{LeftHandSide} = {FirstOperand} && {SecondOperand}",
             InstructionType.Assignment => $"{LeftHandSide} = {FirstOperand}",
@@ -48,9 +47,8 @@ public class IntermediateInstruction : BaseIntermediateInstruction
             InstructionType.NegateInt => $"{LeftHandSide} = -{FirstOperand}",
             InstructionType.FunctionCall => $"{LeftHandSide} = {FirstOperand}",
             InstructionType.Jump => $"jmp {FirstOperand}",
-            InstructionType.None => FirstOperand.ToString(),
+            InstructionType.None => FirstOperand.ToString()
         };
-    }
 
     public override List<string> GetStringLiterals()
     {
