@@ -6,12 +6,14 @@ public class IntermediateInstruction : BaseIntermediateInstruction
         RegisterTerm leftHandSide,
         Term firstOperand,
         InstructionType instructionType,
-        Term secondOperand)
+        Term secondOperand,
+        int block)
     {
         LeftHandSide = leftHandSide;
         FirstOperand = firstOperand;
         InstructionType = instructionType;
         SecondOperand = secondOperand;
+        Block = block;
     }
 
     public RegisterTerm LeftHandSide { get; set; }
@@ -48,7 +50,7 @@ public class IntermediateInstruction : BaseIntermediateInstruction
             InstructionType.FunctionCall => $"{LeftHandSide} = {FirstOperand}",
             InstructionType.Jump => $"jmp {FirstOperand}",
             InstructionType.None => FirstOperand.ToString()
-        };
+        } + $"  block {Block}";
 
     public override List<string> GetStringLiterals()
     {

@@ -1,24 +1,17 @@
 int main() {
-    if ((falseWithSe() || trueWithSe()) && ((falseWithSe() || trueWithSe())))
-        printString("IN IF");
-        
-    int x, y;
-    x = 13;
-    y = 12 / 3 + 14;
-    int z = x * y;
-    printInt(z * x * y);
-        
+    int a;
+    int b;
+    int c;
+    int x;
+    int y;
+    
+    a = x + y;
+    b = x * y;
+    a = 17;
+    // x = 17;
+    c = x + y;
+    
+    y = a * y;
+    
     return 0;
-}
-
-boolean trueWithSe() {
-    printString("TRUE");
-    
-    return true;
-}
-
-boolean falseWithSe() {
-    printString("FALSE");
-    
-    return false;
 }

@@ -40,6 +40,12 @@ public static class LatteCompiler
                 constantsPass.ConstantExpressions);
             walker.Walk(intermediatePass, tree);
 
+            var lcseAlgorithm = new LcseAlgorithm();
+            lcseAlgorithm.Process(intermediatePass.IntermediateFunctions);
+
+            var bestAlgorithm = new BestAlgorithm();
+            bestAlgorithm.Process(intermediatePass.IntermediateFunctions);
+
             Console.WriteLine("INTERMEDIATE REPRESENTATION:");
             Console.WriteLine("-----------------------------");
 

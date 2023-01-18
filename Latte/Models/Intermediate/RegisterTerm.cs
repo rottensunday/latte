@@ -28,7 +28,13 @@ public class RegisterTerm : Term
 
     public IScope Scope { get; set; }
 
-    public override string ToString() => Name;
+    public string VirtualRegister { get; set; }
+    
+    public string PhysicalRegister { get; set; }
+    
+    public int NextUse { get; set; }
+
+    public override string ToString() => string.IsNullOrEmpty(VirtualRegister) ? Name : VirtualRegister;
 
     public override List<string> GetStringLiterals() => new();
 }

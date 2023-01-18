@@ -6,8 +6,15 @@ using Scopes;
 public class IntermediateToX86Compiler
 {
     private readonly Dictionary<string, string> _literalsMap = new();
-    private readonly Dictionary<RegisterTerm, int> _registerOffsetMap = new();
+    private readonly Dictionary<string, int> _registerOffsetMap = new();
     private readonly List<string> _result = new();
+    
+    private Dictionary<string, Register?> _vrToPr = new ();
+    private Dictionary<Register, string> _prToVr = new ();
+    private Dictionary<Register, int> _prNu = new ();
+    private Stack<Register> _physicalRegistersStack = new ();
+    private Dictionary<Register, bool> _marked = new ();
+    
     private int _stackAlignedTo;
 
     public IEnumerable<string> Compile(List<IntermediateFunction> functions)
@@ -76,7 +83,7 @@ public class IntermediateToX86Compiler
             {
                 // Setup stack parameter
                 plusOffset += 8;
-                _registerOffsetMap[parameter] = plusOffset;
+                _registerOffsetMap[parameter.Name] = plusOffset;
             }
             else
             {
@@ -96,7 +103,7 @@ public class IntermediateToX86Compiler
                         ? GasSymbols.GenerateMovToOffset(minusOffset, register.GetLowByte())
                         : GasSymbols.GenerateMovToOffset(minusOffset, register));
 
-                _registerOffsetMap[parameter] = minusOffset;
+                _registerOffsetMap[parameter.Name] = minusOffset;
             }
         }
 
@@ -106,7 +113,7 @@ public class IntermediateToX86Compiler
             .OfType<IntermediateInstruction>()
             .SelectMany(x => new[] { x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm })
             .Where(x => x != null)
-            .Except(parameters)
+            .Where(x => !parameters.Any(y => y.Name == x.Name))
             .Distinct();
 
         foreach (var registerNeeded in registersNeeded)
@@ -120,7 +127,7 @@ public class IntermediateToX86Compiler
                 minusOffset -= 8;
             }
 
-            _registerOffsetMap.Add(registerNeeded, minusOffset);
+            _registerOffsetMap[registerNeeded.Name] = minusOffset;
         }
 
         minusOffset = -minusOffset;
@@ -288,7 +295,7 @@ public class IntermediateToX86Compiler
         var opBool = cmpInstruction as ConstantBoolTerm;
         var opFunCall = cmpInstruction as FunctionCallTerm;
         var offset =
-            opRegister != null ? _registerOffsetMap.GetValueOrDefault(opRegister) : 0;
+            opRegister != null ? _registerOffsetMap.GetValueOrDefault(opRegister.Name) : 0;
 
         if (opRegister != null)
         {
@@ -328,7 +335,7 @@ public class IntermediateToX86Compiler
         if (intermediateInstruction.FirstOperand is ConstantStringTerm stringTerm)
         {
             var label = _literalsMap[stringTerm.Value];
-            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide];
+            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide.Name];
             AddInstruction(GasSymbols.GenerateLeaForLiteral(label, Register.RAX));
             AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.RAX));
         }
@@ -336,8 +343,8 @@ public class IntermediateToX86Compiler
         if (intermediateInstruction.FirstOperand is RegisterTerm registerTerm)
         {
             var register = registerTerm.Type == LatteType.Boolean ? Register.AL : Register.RAX;
-            var sourceOffset = _registerOffsetMap[registerTerm];
-            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide];
+            var sourceOffset = _registerOffsetMap[registerTerm.Name];
+            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide.Name];
             AddInstruction(GasSymbols.GenerateMovFromOffset(sourceOffset, register));
             AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, register));
         }
@@ -345,7 +352,7 @@ public class IntermediateToX86Compiler
 
     private void SaveToVariable(RegisterTerm variable, int value, bool isBool = false)
     {
-        var offset = _registerOffsetMap[variable];
+        var offset = _registerOffsetMap[variable.Name];
 
         AddInstruction(GasSymbols.GenerateConstantMovToMemory(offset, value, isBool));
     }
@@ -357,7 +364,7 @@ public class IntermediateToX86Compiler
             throw new Exception();
         }
 
-        var offset = _registerOffsetMap[registerTerm];
+        var offset = _registerOffsetMap[registerTerm.Name];
         AddInstruction(GasSymbols.GenerateIncrementToOffset(offset));
     }
 
@@ -368,7 +375,7 @@ public class IntermediateToX86Compiler
             throw new Exception();
         }
 
-        var offset = _registerOffsetMap[registerTerm];
+        var offset = _registerOffsetMap[registerTerm.Name];
         AddInstruction(GasSymbols.GenerateDecrementToOffset(offset));
     }
 
@@ -434,7 +441,7 @@ public class IntermediateToX86Compiler
                     break;
                 case RegisterTerm registerTerm:
                 {
-                    var registerOffset = _registerOffsetMap[registerTerm];
+                    var registerOffset = _registerOffsetMap[registerTerm.Name];
 
                     if (registerTerm.Type == LatteType.Boolean)
                     {
@@ -468,7 +475,7 @@ public class IntermediateToX86Compiler
             return;
         }
 
-        var targetOffset = _registerOffsetMap[target];
+        var targetOffset = _registerOffsetMap[target.Name];
 
         AddInstruction(
             target.Type == LatteType.Boolean
@@ -488,7 +495,7 @@ public class IntermediateToX86Compiler
                 break;
             case RegisterTerm registerTerm:
             {
-                var offset = _registerOffsetMap[registerTerm];
+                var offset = _registerOffsetMap[registerTerm.Name];
 
                 AddInstruction(
                     registerTerm.Type == LatteType.Boolean
@@ -516,11 +523,11 @@ public class IntermediateToX86Compiler
         var leftString = left as ConstantStringTerm;
         var rightString = right as ConstantStringTerm;
         var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
+            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
         var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
+            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
         var targetRegisterOffset =
-            target != null ? _registerOffsetMap.GetValueOrDefault(target) : 0;
+            target != null ? _registerOffsetMap.GetValueOrDefault(target.Name) : 0;
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -596,10 +603,10 @@ public class IntermediateToX86Compiler
         var rightBool = right as ConstantBoolTerm;
         var rightString = right as ConstantStringTerm;
         var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
+            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
         var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
-        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
+            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
+        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target.Name);
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -690,10 +697,10 @@ public class IntermediateToX86Compiler
         var leftBool = left as ConstantBoolTerm;
         var rightBool = right as ConstantBoolTerm;
         var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
+            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
         var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
-        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
+            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
+        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target.Name);
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -734,10 +741,10 @@ public class IntermediateToX86Compiler
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
         var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
+            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
         var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
-        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target);
+            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
+        var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target.Name);
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -773,8 +780,8 @@ public class IntermediateToX86Compiler
             return;
         }
 
-        var offset = _registerOffsetMap[registerTerm];
-        var targetOffset = _registerOffsetMap[target];
+        var offset = _registerOffsetMap[registerTerm.Name];
+        var targetOffset = _registerOffsetMap[target.Name];
 
         AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
         AddInstruction(GasSymbols.GenerateNegation(Register.RAX));
@@ -788,8 +795,8 @@ public class IntermediateToX86Compiler
             return;
         }
 
-        var offset = _registerOffsetMap[registerTerm];
-        var targetOffset = _registerOffsetMap[target];
+        var offset = _registerOffsetMap[registerTerm.Name];
+        var targetOffset = _registerOffsetMap[target.Name];
 
         AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.DIL));
         AddInstruction(GasSymbols.GenerateNot(Register.DIL));
@@ -811,11 +818,11 @@ public class IntermediateToX86Compiler
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
         var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister) : 0;
+            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
         var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister) : 0;
+            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
         var targetRegisterOffset =
-            target != null ? _registerOffsetMap.GetValueOrDefault(target) : 0;
+            target != null ? _registerOffsetMap.GetValueOrDefault(target.Name) : 0;
 
         if (leftRegister != null && rightRegister != null)
         {
