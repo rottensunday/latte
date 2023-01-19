@@ -1,5 +1,6 @@
 namespace Latte.Models.Intermediate;
 
+using Compiler;
 using Scopes;
 
 public class RegisterTerm : Term
@@ -30,11 +31,12 @@ public class RegisterTerm : Term
 
     public string VirtualRegister { get; set; }
     
-    public string PhysicalRegister { get; set; }
+    public Register PhysicalRegister { get; set; }
     
     public int NextUse { get; set; }
 
     public override string ToString() => string.IsNullOrEmpty(VirtualRegister) ? Name : VirtualRegister;
+    // public override string ToString() => Name;
 
     public override List<string> GetStringLiterals() => new();
 }

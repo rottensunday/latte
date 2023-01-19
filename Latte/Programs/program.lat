@@ -1,17 +1,36 @@
 int main() {
-    int a;
-    int b;
-    int c;
-    int x;
-    int y;
+    int a = 1;
+    int b = 2;
+    int c = 3;
+    int d = 4;
+    int e = 5;
+    int f = 6;
+    int g = 7;
     
-    a = x + y;
-    b = x * y;
-    a = 17;
-    // x = 17;
-    c = x + y;
+    printInt(a);
     
-    y = a * y;
+    a = a + b;
+    
+    printInt(a);
+    
+    a = 1;
+    a = (a + b) + (c + d);
+    
+    printInt(a);
+    
+    a = 1;
+    a = (a + b) + (c + d) + (e + f);
+    
+    printInt(a);
+    
+    a = 1;
+    b = g + 4;
+    a = (a - b) + (c + d) + (e + f) + ((g + e) + (c + f));
+    
+    printInt(a);
+    printInt(a+b);
+    
+    printInt(g / c);
     
     return 0;
 }

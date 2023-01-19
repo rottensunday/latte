@@ -8,14 +8,18 @@ public class IntermediateToX86Compiler
     private readonly Dictionary<string, string> _literalsMap = new();
     private readonly Dictionary<string, int> _registerOffsetMap = new();
     private readonly List<string> _result = new();
-    
-    private Dictionary<string, Register?> _vrToPr = new ();
-    private Dictionary<Register, string> _prToVr = new ();
-    private Dictionary<Register, int> _prNu = new ();
-    private Stack<Register> _physicalRegistersStack = new ();
-    private Dictionary<Register, bool> _marked = new ();
-    
+
+    private int _currentBlock = -3;
+    private Dictionary<Register, bool> _marked = new();
+    private Stack<Register> _physicalRegistersStack = new();
+    private int _previousBlock = -3;
+    private Dictionary<Register, int> _prNu = new();
+    private Dictionary<Register, string> _prToVr = new();
+
     private int _stackAlignedTo;
+
+    private Dictionary<string, Register?> _vrToPr = new();
+    private Dictionary<string, string> _vrToSr = new();
 
     public IEnumerable<string> Compile(List<IntermediateFunction> functions)
     {
@@ -87,21 +91,10 @@ public class IntermediateToX86Compiler
             }
             else
             {
-                // Setup normal parameter (from registers)
-                if (parameter.Type == LatteType.Boolean)
-                {
-                    minusOffset -= 1;
-                }
-                else
-                {
-                    minusOffset -= 8;
-                }
+                minusOffset -= 8;
 
                 // For boolean registers we load one byte from register (from low byte)
-                AddInstruction(
-                    parameter.Type == LatteType.Boolean
-                        ? GasSymbols.GenerateMovToOffset(minusOffset, register.GetLowByte())
-                        : GasSymbols.GenerateMovToOffset(minusOffset, register));
+                AddInstruction(GasSymbols.GenerateMovToOffset(minusOffset, register));
 
                 _registerOffsetMap[parameter.Name] = minusOffset;
             }
@@ -114,18 +107,12 @@ public class IntermediateToX86Compiler
             .SelectMany(x => new[] { x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm })
             .Where(x => x != null)
             .Where(x => !parameters.Any(y => y.Name == x.Name))
-            .Distinct();
+            .Where(x => !string.IsNullOrEmpty(x.Identifier))
+            .DistinctBy(x => x.Name);
 
         foreach (var registerNeeded in registersNeeded)
         {
-            if (registerNeeded.Type == LatteType.Boolean)
-            {
-                minusOffset -= 1;
-            }
-            else
-            {
-                minusOffset -= 8;
-            }
+            minusOffset -= 8;
 
             _registerOffsetMap[registerNeeded.Name] = minusOffset;
         }
@@ -140,7 +127,44 @@ public class IntermediateToX86Compiler
 
         foreach (var instruction in instructions)
         {
+            if (instruction.Block >= 0 && _currentBlock != instruction.Block && _previousBlock != instruction.Block)
+            {
+                _previousBlock = _currentBlock;
+                _currentBlock = instruction.Block;
+
+                PreprocessBlock(
+                    instructions.Where(x => x.Block == _currentBlock).OfType<IntermediateInstruction>().ToList());
+            }
+
             CompileInstruction(instruction);
+        }
+    }
+
+    private void PreprocessBlock(List<IntermediateInstruction> instructions)
+    {
+        _vrToPr = new Dictionary<string, Register?>();
+        _prToVr = new Dictionary<Register, string>();
+        _prNu = new Dictionary<Register, int>();
+        _physicalRegistersStack = new Stack<Register>();
+        _marked = new Dictionary<Register, bool>();
+        _vrToSr = new Dictionary<string, string>();
+
+        var registersUsed = instructions
+            .SelectMany(x => new[] { x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm })
+            .Where(x => x != null)
+            .Distinct();
+
+        foreach (var registerUsed in registersUsed)
+        {
+            _vrToPr[registerUsed.VirtualRegister] = null;
+        }
+
+        foreach (var physicalRegister in GasSymbols.PreservedRegisters)
+        {
+            _prToVr[physicalRegister] = null;
+            _prNu[physicalRegister] = -1;
+            _physicalRegistersStack.Push(physicalRegister);
+            _marked[physicalRegister] = false;
         }
     }
 
@@ -168,6 +192,130 @@ public class IntermediateToX86Compiler
 
     private void CompileIntermediateInstruction(IntermediateInstruction intermediateInstruction)
     {
+        foreach (var kvp in _marked)
+        {
+            _marked[kvp.Key] = false;
+        }
+
+        if (intermediateInstruction.FirstOperand is RegisterTerm firstOperand)
+        {
+            _vrToSr[firstOperand.VirtualRegister] = firstOperand.Name;
+
+            var pr = _vrToPr[firstOperand.VirtualRegister];
+
+            if (pr == null)
+            {
+                pr = GetAPr(
+                    firstOperand.VirtualRegister,
+                    firstOperand.NextUse);
+
+                firstOperand.PhysicalRegister = pr.Value;
+
+                AddInstruction(
+                    GasSymbols.GenerateMovFromOffset(
+                        _registerOffsetMap[firstOperand.Name],
+                        firstOperand.PhysicalRegister));
+            }
+            else
+            {
+                firstOperand.PhysicalRegister = pr.Value;
+            }
+
+            _marked[pr.Value] = true;
+        }
+
+        if (intermediateInstruction.SecondOperand is RegisterTerm secondOperand)
+        {
+            _vrToSr[secondOperand.VirtualRegister] = secondOperand.Name;
+
+            var pr = _vrToPr[secondOperand.VirtualRegister];
+
+            if (pr == null)
+            {
+                pr = GetAPr(
+                    secondOperand.VirtualRegister,
+                    secondOperand.NextUse);
+
+                secondOperand.PhysicalRegister = pr.Value;
+
+                AddInstruction(
+                    GasSymbols.GenerateMovFromOffset(
+                        _registerOffsetMap[secondOperand.Name],
+                        secondOperand.PhysicalRegister));
+            }
+            else
+            {
+                secondOperand.PhysicalRegister = pr.Value;
+            }
+
+            _marked[pr.Value] = true;
+        }
+
+        if (intermediateInstruction.FirstOperand is RegisterTerm firstOperandNew)
+        {
+            if (firstOperandNew.NextUse == -1 && _prToVr[firstOperandNew.PhysicalRegister] != null)
+            {
+                FreeAPr(firstOperandNew.PhysicalRegister);
+            }
+        }
+
+        if (intermediateInstruction.FirstOperand is RegisterTerm secondOperandNew)
+        {
+            if (secondOperandNew.NextUse == -1 && _prToVr[secondOperandNew.PhysicalRegister] != null)
+            {
+                FreeAPr(secondOperandNew.PhysicalRegister);
+            }
+        }
+
+        foreach (var kvp in _marked)
+        {
+            _marked[kvp.Key] = false;
+        }
+
+        var lhs = intermediateInstruction.LeftHandSide;
+
+        if (lhs != null)
+        {
+            // if (!string.IsNullOrEmpty(lhs.Identifier))
+            // {
+            //     var prev = _vrToSr
+            //         .Where(x => x.Value == lhs.Name);
+            //     
+            //     foreach (var x in prev.Select(x => x.Key))
+            //     {
+            //         var pr = _vrToPr.GetValueOrDefault(x);
+            //
+            //         if (pr != null)
+            //         {
+            //             _vrToPr.Remove(x);
+            //             _prToVr.Remove(pr.Value);
+            //             _physicalRegistersStack.Push(pr.Value);
+            //         }
+            //     }
+            //
+            //     // if (prev.Key != null)
+            //     // {
+            //     //     var pr = _vrToPr[prev.Key];
+            //     //
+            //     //     if (pr != null)
+            //     //     {
+            //     //         _prToVr[pr.Value] = lhs.VirtualRegister;
+            //     //         _vrToPr.Remove(prev.Key);
+            //     //         _vrToPr[lhs.VirtualRegister] = pr;
+            //     //     }
+            //     // }
+            // }
+
+            _vrToSr[lhs.VirtualRegister] = lhs.Name;
+
+            lhs.PhysicalRegister = GetAPr(
+                lhs.VirtualRegister,
+                lhs.NextUse);
+
+            _marked[lhs.PhysicalRegister] = true;
+        }
+
+
         switch (intermediateInstruction.InstructionType)
         {
             case InstructionType.Assignment:
@@ -324,12 +472,18 @@ public class IntermediateToX86Compiler
     {
         if (intermediateInstruction.FirstOperand is ConstantIntTerm intTerm)
         {
-            SaveToVariable(intermediateInstruction.LeftHandSide, intTerm.Value);
+            // SaveToVariable(intermediateInstruction.LeftHandSide, intTerm.Value);
+            AddInstruction(
+                GasSymbols.GenerateMov(intTerm.Value, intermediateInstruction.LeftHandSide.PhysicalRegister));
         }
 
         if (intermediateInstruction.FirstOperand is ConstantBoolTerm boolTerm)
         {
-            SaveToVariable(intermediateInstruction.LeftHandSide, Convert.ToInt32(boolTerm.Value), true);
+            // SaveToVariable(intermediateInstruction.LeftHandSide, Convert.ToInt32(boolTerm.Value), true);
+            AddInstruction(
+                GasSymbols.GenerateMov(
+                    Convert.ToInt32(boolTerm.Value),
+                    intermediateInstruction.LeftHandSide.PhysicalRegister));
         }
 
         if (intermediateInstruction.FirstOperand is ConstantStringTerm stringTerm)
@@ -342,11 +496,16 @@ public class IntermediateToX86Compiler
 
         if (intermediateInstruction.FirstOperand is RegisterTerm registerTerm)
         {
-            var register = registerTerm.Type == LatteType.Boolean ? Register.AL : Register.RAX;
-            var sourceOffset = _registerOffsetMap[registerTerm.Name];
-            var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide.Name];
-            AddInstruction(GasSymbols.GenerateMovFromOffset(sourceOffset, register));
-            AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, register));
+            // var register = registerTerm.Type == LatteType.Boolean ? Register.AL : Register.RAX;
+            // var sourceOffset = _registerOffsetMap[registerTerm.Name];
+            // var targetOffset = _registerOffsetMap[intermediateInstruction.LeftHandSide.Name];
+            // AddInstruction(GasSymbols.GenerateMovFromOffset(sourceOffset, register));
+            // AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, register));
+
+            AddInstruction(
+                GasSymbols.GenerateMov(
+                    registerTerm.PhysicalRegister,
+                    intermediateInstruction.LeftHandSide.PhysicalRegister));
         }
     }
 
@@ -441,21 +600,30 @@ public class IntermediateToX86Compiler
                     break;
                 case RegisterTerm registerTerm:
                 {
-                    var registerOffset = _registerOffsetMap[registerTerm.Name];
+                    if (!_vrToPr.TryGetValue(registerTerm.VirtualRegister, out var pr) || pr == null)
+                    {
+                        AddInstruction(
+                            GasSymbols.GenerateMovFromOffset(_registerOffsetMap[registerTerm.Name], Register.RAX));
+                        pr = Register.RAX;
+                    }
 
-                    if (registerTerm.Type == LatteType.Boolean)
-                    {
-                        AddInstruction(GasSymbols.GenerateMovzxFromOffset(registerOffset, Register.RAX));
-                    }
-                    else
-                    {
-                        AddInstruction(GasSymbols.GenerateMovFromOffset(registerOffset, Register.RAX));
-                    }
+                    // AddInstruction(GasSymbols.GenerateMov());
+
+                    // var registerOffset = _registerOffsetMap[registerTerm.Name];
+                    //
+                    // if (registerTerm.Type == LatteType.Boolean)
+                    // {
+                    //     AddInstruction(GasSymbols.GenerateMovzxFromOffset(registerOffset, Register.RAX));
+                    // }
+                    // else
+                    // {
+                    //     AddInstruction(GasSymbols.GenerateMovFromOffset(registerOffset, Register.RAX));
+                    // }
 
                     AddInstruction(
                         register == Register.None
-                            ? GasSymbols.GeneratePush(Register.RAX)
-                            : GasSymbols.GenerateMov(Register.RAX, register));
+                            ? GasSymbols.GeneratePush(pr.Value)
+                            : GasSymbols.GenerateMov(pr.Value, register));
                     break;
                 }
             }
@@ -508,13 +676,61 @@ public class IntermediateToX86Compiler
         AddFnEpilog();
     }
 
-    private void GenerateAdd(Term left, Term right, RegisterTerm target) =>
-        GenerateBinOp(
-            left,
-            right,
-            target,
-            GasSymbols.GenerateAdd,
-            GasSymbols.GenerateAdd);
+    private void GenerateAdd(Term left, Term right, RegisterTerm target)
+    {
+        var leftRegister = left as RegisterTerm;
+        var rightRegister = right as RegisterTerm;
+        var leftInt = left as ConstantIntTerm;
+        var rightInt = right as ConstantIntTerm;
+
+        if (leftRegister != null && rightRegister != null)
+        {
+            if (target.PhysicalRegister == leftRegister.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, rightRegister.PhysicalRegister));
+
+                return;
+            }
+
+            if (target.PhysicalRegister == rightRegister.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, leftRegister.PhysicalRegister));
+
+                return;
+            }
+            
+            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RAX));
+            AddInstruction(GasSymbols.GenerateAdd(Register.RAX, rightRegister.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+
+            return;
+        }
+
+        if (leftRegister != null)
+        {
+            if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateAdd(leftRegister.PhysicalRegister, rightInt.Value));
+
+                return;
+            }
+            
+            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, rightInt.Value));
+
+            return;
+        }
+
+        if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+        {
+            AddInstruction(GasSymbols.GenerateAdd(rightRegister.PhysicalRegister, leftInt.Value));
+
+            return;
+        }
+            
+        AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
+        AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, rightRegister.PhysicalRegister));
+    }
 
     private void GenerateAddStrings(Term left, Term right, RegisterTerm target)
     {
@@ -549,40 +765,173 @@ public class IntermediateToX86Compiler
         AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
     }
 
-    private void GenerateSubtract(Term left, Term right, RegisterTerm target) =>
-        GenerateBinOp(
-            left,
-            right,
-            target,
-            GasSymbols.GenerateSubtract,
-            GasSymbols.GenerateSubtract,
-            true);
+    private void GenerateSubtract(Term left, Term right, RegisterTerm target)
+    {
+        var leftRegister = left as RegisterTerm;
+        var rightRegister = right as RegisterTerm;
+        var leftInt = left as ConstantIntTerm;
+        var rightInt = right as ConstantIntTerm;
 
-    private void GenerateMultiply(Term left, Term right, RegisterTerm target) =>
-        GenerateBinOp(
-            left,
-            right,
-            target,
-            GasSymbols.GenerateMultiply,
-            GasSymbols.GenerateMultiply);
+        if (leftRegister != null && rightRegister != null)
+        {
+            if (target.PhysicalRegister == leftRegister.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightRegister.PhysicalRegister));
 
-    private void GenerateDivide(Term left, Term right, RegisterTerm target) =>
-        GenerateBinOp(
-            left,
-            right,
-            target,
-            GasSymbols.GenerateDivide,
-            GasSymbols.GenerateDivide,
-            divide: true);
+                return;
+            }
 
-    private void GenerateModulo(Term left, Term right, RegisterTerm target) =>
-        GenerateBinOp(
-            left,
-            right,
-            target,
-            GasSymbols.GenerateDivide,
-            GasSymbols.GenerateDivide,
-            modulo: true);
+            if (target.PhysicalRegister == rightRegister.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, leftRegister.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateNegation(target.PhysicalRegister));
+
+                return;
+            }
+            
+            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RAX));
+            AddInstruction(GasSymbols.GenerateSubtract(Register.RAX, rightRegister.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+
+            return;
+        }
+
+        if (leftRegister != null)
+        {
+            if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateSubtract(leftRegister.PhysicalRegister, rightInt.Value));
+
+                return;
+            }
+            
+            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightInt.Value));
+
+            return;
+        }
+
+        if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+        {
+            AddInstruction(GasSymbols.GenerateSubtract(rightRegister.PhysicalRegister, leftInt.Value));
+            AddInstruction(GasSymbols.GenerateNegation(rightRegister.PhysicalRegister));
+
+            return;
+        }
+            
+        AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
+        AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightRegister.PhysicalRegister));
+    }
+
+    private void GenerateMultiply(Term left, Term right, RegisterTerm target)
+    {
+        var leftRegister = left as RegisterTerm;
+        var rightRegister = right as RegisterTerm;
+        var leftInt = left as ConstantIntTerm;
+        var rightInt = right as ConstantIntTerm;
+
+        if (leftRegister != null && rightRegister != null)
+        {
+            if (target.PhysicalRegister == leftRegister.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightRegister.PhysicalRegister));
+
+                return;
+            }
+
+            if (target.PhysicalRegister == rightRegister.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, leftRegister.PhysicalRegister));
+
+                return;
+            }
+            
+            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RAX));
+            AddInstruction(GasSymbols.GenerateMultiply(Register.RAX, rightRegister.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+
+            return;
+        }
+
+        if (leftRegister != null)
+        {
+            if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateMultiply(leftRegister.PhysicalRegister, rightInt.Value));
+
+                return;
+            }
+            
+            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightInt.Value));
+
+            return;
+        }
+
+        if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+        {
+            AddInstruction(GasSymbols.GenerateMultiply(rightRegister.PhysicalRegister, leftInt.Value));
+
+            return;
+        }
+            
+        AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
+        AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightRegister.PhysicalRegister));
+    }
+
+    private void GenerateDivide(Term left, Term right, RegisterTerm target)
+    {
+        var leftRegister = left as RegisterTerm;
+        var rightRegister = right as RegisterTerm;
+        var leftInt = left as ConstantIntTerm;
+        var rightInt = right as ConstantIntTerm;
+
+        if (leftRegister != null && rightRegister != null)
+        {
+            AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightRegister.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+
+            return;
+        }
+
+        if (leftRegister != null)
+        {
+            AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightInt.Value));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+
+            return;
+        }
+
+        AddInstruction(GasSymbols.GenerateDivide(leftInt.Value, rightRegister.PhysicalRegister));
+        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+    }
+
+    private void GenerateModulo(Term left, Term right, RegisterTerm target)
+    {
+        var leftRegister = left as RegisterTerm;
+        var rightRegister = right as RegisterTerm;
+        var leftInt = left as ConstantIntTerm;
+        var rightInt = right as ConstantIntTerm;
+
+        if (leftRegister != null && rightRegister != null)
+        {
+            AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightRegister.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
+
+            return;
+        }
+
+        if (leftRegister != null)
+        {
+            AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightInt.Value));
+            AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
+
+            return;
+        }
+
+        AddInstruction(GasSymbols.GenerateDivide(leftInt.Value, rightRegister.PhysicalRegister));
+        AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
+    }
 
     private void GenerateEqual(Term left, Term right, RegisterTerm target) =>
         GenerateEqualityComparison(left, right, target, true);
@@ -803,131 +1152,6 @@ public class IntermediateToX86Compiler
         AddInstruction(GasSymbols.GenerateMovToOffset(targetOffset, Register.DIL));
     }
 
-    private void GenerateBinOp(
-        Term left,
-        Term right,
-        RegisterTerm target,
-        Func<Register, Register, string> twoRegisterFun,
-        Func<Register, int, string> registerAndParamFun,
-        bool negate = false,
-        bool divide = false,
-        bool modulo = false)
-    {
-        var leftRegister = left as RegisterTerm;
-        var rightRegister = right as RegisterTerm;
-        var leftInt = left as ConstantIntTerm;
-        var rightInt = right as ConstantIntTerm;
-        var leftRegisterOffset =
-            leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
-        var rightRegisterOffset =
-            rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
-        var targetRegisterOffset =
-            target != null ? _registerOffsetMap.GetValueOrDefault(target.Name) : 0;
-
-        if (leftRegister != null && rightRegister != null)
-        {
-            if (target == leftRegister)
-            {
-                AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
-                AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RDI));
-
-                AddInstruction(twoRegisterFun(Register.RAX, Register.RDI));
-
-                AddInstruction(
-                    modulo
-                        ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                        : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-                return;
-            }
-
-            if (target == rightRegister)
-            {
-                AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
-                AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RDI));
-
-                AddInstruction(twoRegisterFun(Register.RAX, Register.RDI));
-
-                AddInstruction(
-                    modulo
-                        ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                        : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-                return;
-            }
-
-            AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
-            AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RDI));
-
-            AddInstruction(twoRegisterFun(Register.RAX, Register.RDI));
-
-            AddInstruction(
-                modulo
-                    ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                    : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-
-            return;
-        }
-
-        if (leftRegister != null)
-        {
-            if (right != null)
-            {
-                if (divide || modulo)
-                {
-                    AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
-                    AddInstruction(GasSymbols.GenerateMov(rightInt.Value, Register.RDI));
-                    AddInstruction(twoRegisterFun(Register.RAX, Register.RDI));
-
-                    AddInstruction(
-                        modulo
-                            ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                            : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-                }
-                else
-                {
-                    AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.RAX));
-                    AddInstruction(registerAndParamFun(Register.RAX, rightInt.Value));
-                    AddInstruction(GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-                }
-
-                return;
-            }
-        }
-
-        if (rightRegister != null)
-        {
-            if (left != null)
-            {
-                AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.RDI));
-
-                if (divide || modulo)
-                {
-                    AddInstruction(GasSymbols.GenerateMov(leftInt.Value, Register.RAX));
-                    AddInstruction(GasSymbols.GenerateDivide(Register.RAX, Register.RDI));
-                    AddInstruction(
-                        modulo
-                            ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                            : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RAX));
-                }
-                else
-                {
-                    AddInstruction(registerAndParamFun(Register.RDI, leftInt.Value));
-
-                    if (negate)
-                    {
-                        AddInstruction(GasSymbols.GenerateNegation(Register.RDI));
-                    }
-
-                    AddInstruction(
-                        modulo
-                            ? GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDX)
-                            : GasSymbols.GenerateMovToOffset(targetRegisterOffset, Register.RDI));
-                }
-            }
-        }
-    }
-
     private void AddInstruction(string instruction) => _result.Add(instruction);
 
     private void AddStringLiteral(string literal)
@@ -946,13 +1170,72 @@ public class IntermediateToX86Compiler
     private void AddFnProlog()
     {
         AddInstruction(GasSymbols.GeneratePush(Register.RBP));
+        AddInstruction(GasSymbols.GeneratePush(Register.RBX));
+        AddInstruction(GasSymbols.GeneratePush(Register.R12));
+        AddInstruction(GasSymbols.GeneratePush(Register.R13));
+        AddInstruction(GasSymbols.GeneratePush(Register.R14));
+        AddInstruction(GasSymbols.GeneratePush(Register.R15));
         AddInstruction(GasSymbols.GenerateMov(Register.RSP, Register.RBP));
     }
 
     private void AddFnEpilog()
     {
         AddInstruction(GasSymbols.GenerateMov(Register.RBP, Register.RSP));
+        AddInstruction(GasSymbols.GeneratePop(Register.R15));
+        AddInstruction(GasSymbols.GeneratePop(Register.R14));
+        AddInstruction(GasSymbols.GeneratePop(Register.R13));
+        AddInstruction(GasSymbols.GeneratePop(Register.R12));
+        AddInstruction(GasSymbols.GeneratePop(Register.RBX));
         AddInstruction(GasSymbols.GeneratePop(Register.RBP));
         AddInstruction(GasSymbols.GenerateRet());
+    }
+
+    private Register GetAPr(string vr, int nu)
+    {
+        Register result;
+
+        if (_physicalRegistersStack.Any())
+        {
+            result = _physicalRegistersStack.Pop();
+        }
+        else
+        {
+            result = _prNu.Where(x => x.Value == -1).Select(x => x.Key).FirstOrDefault(x => !_marked[x]);
+
+            if (result == Register.None)
+            {
+                result = _prNu.OrderByDescending(x => x.Value).FirstOrDefault(x => !_marked[x.Key]).Key;
+            }
+
+            var spilledVr = _prToVr[result];
+            var sr = _vrToSr[spilledVr];
+
+            if (!_registerOffsetMap.ContainsKey(sr))
+            {
+                // AddInstruction(GasSymbols.GenerateSubtract(Register.RSP, 8));
+                AddInstruction(GasSymbols.GeneratePush(result));
+                _registerOffsetMap[sr] = _registerOffsetMap.Values.Min() - 8;
+            }
+            else
+            {
+                AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[sr], result));
+            }
+
+            _vrToPr[spilledVr] = null;
+        }
+
+        _vrToPr[vr] = result;
+        _prToVr[result] = vr;
+        _prNu[result] = nu;
+
+        return result;
+    }
+
+    private void FreeAPr(Register pr)
+    {
+        _vrToPr[_prToVr[pr]] = null;
+        _prToVr[pr] = null;
+        _prNu[pr] = -1;
+        _physicalRegistersStack.Push(pr);
     }
 }

@@ -26,7 +26,12 @@ public enum Register
     SPL,
     R8L,
     R8B,
-    R9B
+    R9B,
+    RBX,
+    R12,
+    R13,
+    R14,
+    R15
 }
 
 public static class RegisterExtensions
@@ -67,6 +72,15 @@ public static class GasSymbols
         Register.RCX,
         Register.R8,
         Register.R9
+    };
+    
+    public static readonly List<Register> PreservedRegisters = new()
+    {
+        Register.RBX,
+        Register.R12,
+        Register.R13,
+        Register.R14,
+        Register.R15
     };
 
     public static string GenerateFunctionSymbol(string name) => $"_{name}:";
@@ -135,6 +149,15 @@ public static class GasSymbols
     }
 
     public static string GenerateDivide(Register left, int right)
+    {
+        var result = $"MOV RAX, {left}\n";
+        result += "CQO \n";
+        result += $"IDIV {right}";
+
+        return result;
+    }
+    
+    public static string GenerateDivide(int left, Register right)
     {
         var result = $"MOV RAX, {left}\n";
         result += "CQO \n";
