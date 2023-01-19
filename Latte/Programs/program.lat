@@ -1,36 +1,6 @@
+int d() { return 0;}
+int s(int x) {return x + 1;}
 int main() {
-    int a = 1;
-    int b = 2;
-    int c = 3;
-    int d = 4;
-    int e = 5;
-    int f = 6;
-    int g = 7;
-    
-    printInt(a);
-    
-    a = a + b;
-    
-    printInt(a);
-    
-    a = 1;
-    a = (a + b) + (c + d);
-    
-    printInt(a);
-    
-    a = 1;
-    a = (a + b) + (c + d) + (e + f);
-    
-    printInt(a);
-    
-    a = 1;
-    b = g + 4;
-    a = (a - b) + (c + d) + (e + f) + ((g + e) + (c + f));
-    
-    printInt(a);
-    printInt(a+b);
-    
-    printInt(g / c);
-    
-    return 0;
+   printInt(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(d())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));  
+  return 0;
 }

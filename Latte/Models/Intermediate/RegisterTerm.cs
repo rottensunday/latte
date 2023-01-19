@@ -35,8 +35,8 @@ public class RegisterTerm : Term
     
     public int NextUse { get; set; }
 
-    public override string ToString() => string.IsNullOrEmpty(VirtualRegister) ? Name : VirtualRegister;
-    // public override string ToString() => Name;
+    // public override string ToString() => string.IsNullOrEmpty(VirtualRegister) ? Name : VirtualRegister;
+    public override string ToString() => Name;
 
     public override List<string> GetStringLiterals() => new();
 }

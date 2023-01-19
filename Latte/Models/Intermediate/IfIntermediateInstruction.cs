@@ -25,7 +25,7 @@ public class IfIntermediateInstruction : BaseIntermediateInstruction
     public bool Negate { get; set; }
 
     public override string ToString() =>
-        $"if {(Negate ? "!" : "")}({Condition}) then jumpto {JumpLabel.LabelTerm.Label}" + $"  block {Block}";
+        $"if {(Negate ? "!" : "")}({Condition}) then jumpto {JumpLabel.LabelTerm.Label}" + $"  block {Block}" + $"      {InBoolExpr}";
 
     public override List<string> GetStringLiterals() => Condition.GetStringLiterals().ToList();
 }

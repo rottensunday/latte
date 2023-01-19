@@ -31,7 +31,11 @@ public enum Register
     R12,
     R13,
     R14,
-    R15
+    R15,
+    R12B,
+    R13B,
+    R14B,
+    R15B
 }
 
 public static class RegisterExtensions
@@ -47,7 +51,12 @@ public static class RegisterExtensions
             Register.RBP => Register.BPL,
             Register.RSP => Register.SPL,
             Register.R8 => Register.R8B,
-            Register.R9 => Register.R9B
+            Register.R9 => Register.R9B,
+            Register.R12 => Register.R12B,
+            Register.R13 => Register.R13B,
+            Register.R14 => Register.R14B,
+            Register.R15 => Register.R15B,
+            Register.RBX => Register.BL
         };
 }
 
@@ -152,7 +161,8 @@ public static class GasSymbols
     {
         var result = $"MOV RAX, {left}\n";
         result += "CQO \n";
-        result += $"IDIV {right}";
+        result += $"{GenerateMov(right, Register.RDI)}\n";
+        result += $"IDIV RDI";
 
         return result;
     }
@@ -181,6 +191,36 @@ public static class GasSymbols
     public static string GenerateSetLessToOffset(int offset) => $"SETL [RBP{BuildOffsetString(offset)}]";
 
     public static string GenerateSetLessEqualToOffset(int offset) => $"SETLE [RBP{BuildOffsetString(offset)}]";
+    
+    public static string GenerateSetEqual(Register register)
+    {
+        return $"MOV {register}, 0\n SETE {register.GetLowByte()}";
+    }
+
+    public static string GenerateSetNotEqual(Register register)
+    {
+        return $"MOV {register}, 0\nSETNE {register.GetLowByte()}";
+    }
+
+    public static string GenerateSetGreater(Register register)
+    {
+        return $"MOV {register}, 0\nSETG {register.GetLowByte()}";
+    }
+
+    public static string GenerateSetGreaterEqual(Register register)
+    {
+        return $"MOV {register}, 0\nSETGE {register.GetLowByte()}";
+    }
+
+    public static string GenerateSetLess(Register register)
+    {
+        return $"MOV {register}, 0\nSETL {register.GetLowByte()}";
+    }
+
+    public static string GenerateSetLessEqual(Register register)
+    {
+        return $"MOV {register}, 0\nSETLE {register.GetLowByte()}";
+    }
 
     public static string GenerateAnd(Register left, Register right) => $"AND {left}, {right}";
 

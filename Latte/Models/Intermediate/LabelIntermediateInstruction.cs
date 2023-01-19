@@ -13,7 +13,7 @@ public class LabelIntermediateInstruction : BaseIntermediateInstruction
 
     public bool IsJump { get; set; }
 
-    public override string ToString() => !IsJump ? $"{LabelTerm.Label}:" + $"  block {Block}" : $"jmp {LabelTerm.Label}" + $"  block {Block}";
+    public override string ToString() => !IsJump ? $"{LabelTerm.Label}:" + $"  block {Block}" + $"      {InBoolExpr}" : $"jmp {LabelTerm.Label}" + $"  block {Block}" + $"      {InBoolExpr}";
 
     public override List<string> GetStringLiterals() => new();
 }

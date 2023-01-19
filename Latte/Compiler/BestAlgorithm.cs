@@ -32,6 +32,37 @@ public class BestAlgorithm
 
     private void ProcessFunction(IntermediateFunction function)
     {
+        var currentBlock = 0;
+
+        for (var i = 0; i < function.Instructions.Count; i++)
+        {
+            // if (i > 0)
+            // {
+            //     if (function.Instructions[i - 1].InBoolExpr && !function.Instructions[i].InBoolExpr)
+            //     {
+            //         currentBlock++;
+            //     }
+            // }
+            //
+            var instruction = function.Instructions[i];
+            instruction.Block = currentBlock;
+            
+            if (instruction is LabelIntermediateInstruction lt && function.Instructions.Any(
+                    x =>
+                        (x is IfIntermediateInstruction inter &&
+                         inter.JumpLabel.LabelTerm.Label == lt.LabelTerm.Label) ||
+                        (x is LabelIntermediateInstruction { IsJump: true } lt1 &&
+                         lt1.LabelTerm.Label == lt.LabelTerm.Label)))
+            {
+                currentBlock++;
+            }
+            
+            if (instruction is IfIntermediateInstruction)
+            {
+                currentBlock++;
+            }
+        }
+
         var blocks = function.Instructions
             .GroupBy(x => x.Block)
             .Where(x => x.Key >= 0)
@@ -39,9 +70,9 @@ public class BestAlgorithm
 
         foreach (var block in blocks)
         {
-            var intermediateInstructions = block.OfType<IntermediateInstruction>().ToList();
+            var instructions = block.ToList();
 
-            foreach (var instruction in intermediateInstructions)
+            foreach (var instruction in instructions.OfType<IntermediateInstruction>())
             {
                 if (instruction.LeftHandSide != null)
                 {
@@ -68,7 +99,7 @@ public class BestAlgorithm
                     // {
                     //     args.Add(arg);
                     // }
-                    
+
                     var args = new List<Term>();
 
                     instruction.FirstOperand = new FunctionCallTerm(functionCallTerm.Name, args);
@@ -77,17 +108,18 @@ public class BestAlgorithm
                     {
                         if (arg is RegisterTerm x)
                         {
-                            args.Add(new RegisterTerm(
-                                x.Name,
-                                x.Type,
-                                x.Identifier));
+                            args.Add(
+                                new RegisterTerm(
+                                    x.Name,
+                                    x.Type,
+                                    x.Identifier));
                         }
                         else
                         {
                             args.Add(arg);
                         }
                     }
-                } 
+                }
 
                 if (instruction.FirstOperand is RegisterTerm firstOperand)
                 {
@@ -106,11 +138,22 @@ public class BestAlgorithm
                 }
             }
 
-            ProcessBlock(block.OfType<IntermediateInstruction>().ToList());
+            foreach (var ifInstruction in instructions.OfType<IfIntermediateInstruction>())
+            {
+                if (ifInstruction.Condition is RegisterTerm registerTerm)
+                {
+                    ifInstruction.Condition = new RegisterTerm(
+                        registerTerm.Name,
+                        registerTerm.Type,
+                        registerTerm.Identifier);
+                }
+            }
+
+            ProcessBlock(block.ToList());
         }
     }
 
-    private void ProcessBlock(List<IntermediateInstruction> instructions) => SetLiveRanges(instructions);
+    private void ProcessBlock(List<BaseIntermediateInstruction> instructions) => SetLiveRanges(instructions);
 
     // _vrToPr = new Dictionary<string, Register?>();
     // _prToVr = new Dictionary<Register, string>();
@@ -153,21 +196,29 @@ public class BestAlgorithm
     //
     //     }
     // }
-    private void SetLiveRanges(List<IntermediateInstruction> instructions)
+    private void SetLiveRanges(List<BaseIntermediateInstruction> instructions)
     {
         var vrCounter = 0;
         var vrName = $"v{vrCounter}";
 
         var registersInFunctions = instructions
+            .OfType<IntermediateInstruction>()
             .Where(x => x.FirstOperand is FunctionCallTerm)
             .SelectMany(x => (x.FirstOperand as FunctionCallTerm).Arguments.OfType<RegisterTerm>())
             .Where(x => x != null);
 
         var registersUsed = instructions
-            .Where(x => x.LeftHandSide != null || x is FunctionCallTerm)
+            // .Where(x => x.LeftHandSide != null || x is FunctionCallTerm)
+            .OfType<IntermediateInstruction>()
             .SelectMany(x => new[] { x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm })
             .Where(x => x != null)
             .Concat(registersInFunctions)
+            .Concat(
+                instructions
+                    .OfType<IfIntermediateInstruction>()
+                    .Select(x => x.Condition)
+                    .OfType<RegisterTerm>()
+                    .Where(x => x != null))
             .DistinctBy(x => x.Name);
 
         var srToVr = new Dictionary<string, string>();
@@ -180,71 +231,100 @@ public class BestAlgorithm
         }
 
         var reversed =
-            new List<IntermediateInstruction>(instructions.Where(x => x.LeftHandSide != null || x.FirstOperand is FunctionCallTerm));
+            new List<BaseIntermediateInstruction>(instructions);
         reversed.Reverse();
         var index = reversed.Count - 1;
 
-        foreach (var instruction in reversed)
+        foreach (var baseInstruction in reversed)
         {
-            // for each operand, O, that OP defines do
-            if (instruction.LeftHandSide != null)
+            if (baseInstruction is LabelIntermediateInstruction)
             {
-                if (srToVr[instruction.LeftHandSide.Name] == null)
-                {
-                    srToVr[instruction.LeftHandSide.Name] = vrName;
-                    UpdateVr(ref vrCounter, ref vrName);
-                }
-
-                instruction.LeftHandSide.VirtualRegister = srToVr[instruction.LeftHandSide.Name];
-                instruction.LeftHandSide.NextUse = prevUse[instruction.LeftHandSide.Name];
-                prevUse[instruction.LeftHandSide.Name] = -1;
-                srToVr[instruction.LeftHandSide.Name] = null;
+                index--;
+                continue;
             }
 
-            // for each operand, O, that OP uses do
-            if (instruction.FirstOperand is FunctionCallTerm functionCallTerm)
+            if (baseInstruction is not IntermediateInstruction intermediateInstruction)
             {
-                foreach (var term in functionCallTerm.Arguments)
+                if (baseInstruction is IfIntermediateInstruction ifInstruction)
                 {
-                    if (term is RegisterTerm argRegister)
+                    if (ifInstruction.Condition is RegisterTerm registerTerm)
                     {
-                        if (srToVr[argRegister.Name] == null)
+                        if (srToVr[registerTerm.Name] == null)
                         {
-                            srToVr[argRegister.Name] = vrName;
+                            srToVr[registerTerm.Name] = vrName;
                             UpdateVr(ref vrCounter, ref vrName);
                         }
 
-                        argRegister.VirtualRegister = srToVr[argRegister.Name];
-                        argRegister.NextUse = prevUse[argRegister.Name];
-                        prevUse[argRegister.Name] = index;
+                        registerTerm.VirtualRegister = srToVr[registerTerm.Name];
+                        registerTerm.NextUse = prevUse[registerTerm.Name];
+                        prevUse[registerTerm.Name] = index;
                     }
                 }
             }
-
-            if (instruction.FirstOperand is RegisterTerm firstOperand)
+            else
             {
-                if (srToVr[firstOperand.Name] == null)
+                var instruction = intermediateInstruction;
+
+                // for each operand, O, that OP defines do
+                if (instruction.LeftHandSide != null)
                 {
-                    srToVr[firstOperand.Name] = vrName;
-                    UpdateVr(ref vrCounter, ref vrName);
+                    if (srToVr[instruction.LeftHandSide.Name] == null)
+                    {
+                        srToVr[instruction.LeftHandSide.Name] = vrName;
+                        UpdateVr(ref vrCounter, ref vrName);
+                    }
+
+                    instruction.LeftHandSide.VirtualRegister = srToVr[instruction.LeftHandSide.Name];
+                    instruction.LeftHandSide.NextUse = prevUse[instruction.LeftHandSide.Name];
+                    prevUse[instruction.LeftHandSide.Name] = -1;
+                    srToVr[instruction.LeftHandSide.Name] = null;
                 }
 
-                firstOperand.VirtualRegister = srToVr[firstOperand.Name];
-                firstOperand.NextUse = prevUse[firstOperand.Name];
-                prevUse[firstOperand.Name] = index;
-            }
-
-            if (instruction.SecondOperand is RegisterTerm secondOperand)
-            {
-                if (srToVr[secondOperand.Name] == null)
+                // for each operand, O, that OP uses do
+                if (instruction.FirstOperand is FunctionCallTerm functionCallTerm)
                 {
-                    srToVr[secondOperand.Name] = vrName;
-                    UpdateVr(ref vrCounter, ref vrName);
+                    foreach (var term in functionCallTerm.Arguments)
+                    {
+                        if (term is RegisterTerm argRegister)
+                        {
+                            if (srToVr[argRegister.Name] == null)
+                            {
+                                srToVr[argRegister.Name] = vrName;
+                                UpdateVr(ref vrCounter, ref vrName);
+                            }
+
+                            argRegister.VirtualRegister = srToVr[argRegister.Name];
+                            argRegister.NextUse = prevUse[argRegister.Name];
+                            prevUse[argRegister.Name] = index;
+                        }
+                    }
                 }
 
-                secondOperand.VirtualRegister = srToVr[secondOperand.Name];
-                secondOperand.NextUse = prevUse[secondOperand.Name];
-                prevUse[secondOperand.Name] = index;
+                if (instruction.FirstOperand is RegisterTerm firstOperand)
+                {
+                    if (srToVr[firstOperand.Name] == null)
+                    {
+                        srToVr[firstOperand.Name] = vrName;
+                        UpdateVr(ref vrCounter, ref vrName);
+                    }
+
+                    firstOperand.VirtualRegister = srToVr[firstOperand.Name];
+                    firstOperand.NextUse = prevUse[firstOperand.Name];
+                    prevUse[firstOperand.Name] = index;
+                }
+
+                if (instruction.SecondOperand is RegisterTerm secondOperand)
+                {
+                    if (srToVr[secondOperand.Name] == null)
+                    {
+                        srToVr[secondOperand.Name] = vrName;
+                        UpdateVr(ref vrCounter, ref vrName);
+                    }
+
+                    secondOperand.VirtualRegister = srToVr[secondOperand.Name];
+                    secondOperand.NextUse = prevUse[secondOperand.Name];
+                    prevUse[secondOperand.Name] = index;
+                }
             }
 
             index--;

@@ -125,6 +125,14 @@ public class IntermediateBuilderPass : LatteBaseListener
             }
         } while (indexToDelete != -1);
 
+        foreach (var ins in newInstructions)
+        {
+            if (ins.Block < 0)
+            {
+                ins.InBoolExpr = true;
+            }
+        }
+
         _currentFunction.Instructions = newInstructions;
         IntermediateFunctions.Add(_currentFunction);
     }

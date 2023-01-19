@@ -50,7 +50,7 @@ public class IntermediateInstruction : BaseIntermediateInstruction
             InstructionType.FunctionCall => $"{LeftHandSide} = {FirstOperand}",
             InstructionType.Jump => $"jmp {FirstOperand}",
             InstructionType.None => FirstOperand.ToString()
-        } + $"  block {Block}";
+        } + $"  block {Block}" + $"      {InBoolExpr}";
 
     public override List<string> GetStringLiterals()
     {
