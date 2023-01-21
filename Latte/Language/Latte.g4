@@ -5,7 +5,8 @@ program
     ;
 
 topDef
-    : type_ ID '(' arg? ')' block
+    : type_ ID '(' arg? ')' block       # TopDefFunction
+    | 'class' ID '{' classDecl* '}'     # TopDefClass
     ;
 
 arg
@@ -20,9 +21,9 @@ stmt
     : ';'                                # Empty
     | block                              # BlockStmt
     | type_ item ( ',' item )* ';'       # Decl
-    | ID '=' expr ';'                    # Ass
-    | ID '++' ';'                        # Incr
-    | ID '--' ';'                        # Decr
+    | lhs '=' expr ';'                    # Ass
+    | lhs '++' ';'                        # Incr
+    | lhs '--' ';'                        # Decr
     | 'return' expr ';'                  # Ret
     | 'return' ';'                       # VRet
     | 'if' '(' expr ')' stmt             # Cond
@@ -30,12 +31,22 @@ stmt
     | 'while' '(' expr ')' stmt          # While
     | expr ';'                           # SExp
     ;
+    
+lhs
+    : ID                                # IdLhs
+    | ID '.' fieldAccess                # FieldAccessLHS
+    ;
+    
+classDecl
+    : type_ item ( ',' item )* ';'
+    ;
 
 type_
     : 'int'     # Int
     | 'string'  # Str
     | 'boolean' # Bool
     | 'void'    # Void
+    | ID        # ClassInstance
     ;
 
 item
@@ -57,6 +68,13 @@ expr
     | ID '(' ( expr ( ',' expr )* )? ')'  # EFunCall
     | STR                           # EStr
     | '(' expr ')'                  # EParen
+    | 'new' ID                      # ENew
+    | '(' ID  ') null'              # ENull
+    | ID '.' fieldAccess            # EFieldAccessRHS
+    ;
+    
+fieldAccess
+    : ID ( '.' fieldAccess)?
     ;
 
 addOp

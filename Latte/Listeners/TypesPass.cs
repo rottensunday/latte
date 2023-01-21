@@ -8,7 +8,7 @@ public class TypesPass : LatteBaseListener
     private readonly GlobalScope _globals;
     private readonly ParseTreeProperty<IScope> _scopes = new();
     private IScope _currentScope;
-    public ParseTreeProperty<LatteType> Types = new();
+    public ParseTreeProperty<string> Types = new();
 
     public TypesPass(GlobalScope globals, ParseTreeProperty<IScope> scopes)
     {
@@ -18,9 +18,9 @@ public class TypesPass : LatteBaseListener
 
     public override void EnterProgram(LatteParser.ProgramContext context) => _currentScope = _globals;
 
-    public override void EnterTopDef(LatteParser.TopDefContext context) => _currentScope = _scopes.Get(context);
+    public override void EnterTopDefFunction(LatteParser.TopDefFunctionContext context) => _currentScope = _scopes.Get(context);
 
-    public override void ExitTopDef(LatteParser.TopDefContext context) =>
+    public override void ExitTopDefFunction(LatteParser.TopDefFunctionContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
 
     public override void EnterBlock(LatteParser.BlockContext context) => _currentScope = _scopes.Get(context);
@@ -113,5 +113,93 @@ public class TypesPass : LatteBaseListener
                 Types.Put(context, LatteType.Boolean);
                 break;
         }
+    }
+
+    public override void ExitENew(LatteParser.ENewContext context)
+    {
+        var name = context.ID().GetText();
+        var symbol = _currentScope.Resolve(name);
+
+        if (symbol is not ClassSymbol cs)
+        {
+            throw new Exception("Can't find class to create");
+        }
+        
+        Types.Put(context, cs.Name);
+    }
+
+    public override void ExitENull(LatteParser.ENullContext context)
+    {
+        var name = context.ID().GetText();
+        var symbol = _currentScope.Resolve(name);
+
+        if (symbol is not ClassSymbol cs)
+        {
+            throw new Exception("Can't find class to cast to null");
+        }
+        
+        Types.Put(context, cs.Name);
+    }
+
+    public override void ExitFieldAccessLHS(LatteParser.FieldAccessLHSContext context)
+    {
+        var name = context.ID().GetText();
+        var symbol = _currentScope.Resolve(name);
+
+        if (symbol is not VariableSymbol vs)
+        {
+            throw new Exception($"Can't find class instance {name} to get property");
+        }
+
+        var classSymbol = _currentScope.Resolve(symbol.LatteType);
+
+        if (classSymbol is not ClassSymbol cs)
+        {
+            throw new Exception($"Can't find class {symbol.LatteType} to get property");
+        }
+        
+        Types.Put(context, GetFieldAccessType(context.fieldAccess(), cs));
+    }
+
+    public override void ExitEFieldAccessRHS(LatteParser.EFieldAccessRHSContext context)
+    {
+        var name = context.ID().GetText();
+        var symbol = _currentScope.Resolve(name);
+
+        if (symbol is not VariableSymbol vs)
+        {
+            throw new Exception($"Can't find class instance {name} to get property");
+        }
+
+        var classSymbol = _currentScope.Resolve(symbol.LatteType);
+
+        if (classSymbol is not ClassSymbol cs)
+        {
+            throw new Exception($"Can't find class {symbol.LatteType} to get property");
+        }
+        
+        Types.Put(context, GetFieldAccessType(context.fieldAccess(), cs));
+    }
+
+    private string GetFieldAccessType(LatteParser.FieldAccessContext context, ClassSymbol cs)
+    {
+        if (context.fieldAccess() == null)
+        {
+            var field = context.ID();
+            var fieldSymbol = cs.Fields.FirstOrDefault(x => x.Name == field.GetText());
+
+            return fieldSymbol.LatteType ?? fieldSymbol.Name;
+        }
+
+        var innerObj = context.ID().GetText();
+        var name = cs.Fields.FirstOrDefault(x => x.Name == innerObj).LatteType;
+        var innerObjSymbol = _currentScope.Resolve(name);
+
+        if (innerObjSymbol is not ClassSymbol innerCs)
+        {
+            throw new Exception($"Can't find class {innerObj} to get property");
+        }
+
+        return GetFieldAccessType(context.fieldAccess(), innerCs);
     }
 }

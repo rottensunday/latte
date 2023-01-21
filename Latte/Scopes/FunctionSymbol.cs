@@ -7,7 +7,7 @@ public class FunctionSymbol : Symbol, IScope
 
     public FunctionSymbol(
         string name,
-        LatteType retLatteType,
+        string retLatteType,
         IScope enclosingScope,
         Dictionary<string, Symbol> arguments = default) : base(name, retLatteType)
     {

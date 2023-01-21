@@ -7,7 +7,7 @@ public class RegisterTerm : Term
 {
     public RegisterTerm(
         string name,
-        LatteType type,
+        string type,
         string identifier = null,
         bool isParam = false,
         IScope scope = null)
@@ -25,7 +25,7 @@ public class RegisterTerm : Term
 
     public bool IsParam { get; set; }
 
-    public LatteType Type { get; set; }
+    public string Type { get; set; }
 
     public IScope Scope { get; set; }
 
@@ -34,9 +34,20 @@ public class RegisterTerm : Term
     public Register PhysicalRegister { get; set; }
     
     public int NextUse { get; set; }
+    
+    public bool MemoryAddress { get; set; }
 
     // public override string ToString() => string.IsNullOrEmpty(VirtualRegister) ? Name : VirtualRegister;
     public override string ToString() => Name;
 
     public override List<string> GetStringLiterals() => new();
+    
+    public override List<RegisterTerm> GetUsedRegisters() => new() {this};
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+        if (Name == used)
+        {
+            Name = newRegister;
+        }
+    }
 }

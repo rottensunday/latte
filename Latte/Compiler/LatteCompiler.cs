@@ -39,21 +39,28 @@ public static class LatteCompiler
                 typesPass.Types,
                 constantsPass.ConstantExpressions);
             walker.Walk(intermediatePass, tree);
-
-            var lcseAlgorithm = new LcseAlgorithm();
-            lcseAlgorithm.Process(intermediatePass.IntermediateFunctions);
-
-            var bestAlgorithm = new BestAlgorithm();
-            bestAlgorithm.Process(intermediatePass.IntermediateFunctions);
-
+            
             Console.WriteLine("INTERMEDIATE REPRESENTATION:");
             Console.WriteLine("-----------------------------");
 
             foreach (var function in intermediatePass.IntermediateFunctions)
             {
+                FlowAnalyzer.RefreshInstructions(function);
+                var blocks = FlowAnalyzer.BuildBlocks(function);
+                FlowAnalyzer.EliminateCommonSubexpressions(blocks);
+                FlowAnalyzer.PropagateCopies(blocks);
+
+                foreach (var block in blocks)
+                {
+                    FlowAnalyzer.SetLiveRanges(block);
+                }
+                    
+                function.Instructions = blocks.SelectMany(x => x.Instructions).ToList();
+                function.Blocks = blocks;
+                
                 Console.WriteLine($"{function.Name}:");
 
-                foreach (var instruction in function.Instructions)
+                foreach (var instruction in blocks.SelectMany(x => x.Instructions))
                 {
                     Console.WriteLine(instruction);
                 }
@@ -81,7 +88,7 @@ public static class LatteCompiler
             var compiler = new IntermediateToX86Compiler();
 
             instructions.Add(GasSymbols.Prefix);
-            instructions.AddRange(compiler.Compile(intermediatePass.IntermediateFunctions));
+            instructions.AddRange(compiler.Compile(intermediatePass.IntermediateFunctions, symbolTablePass.Classes));
 
             return new CompileResult(
                 ParsingResultType.Ok,

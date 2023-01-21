@@ -1,5 +1,7 @@
 namespace Latte.Models.Intermediate;
 
+using System.Linq.Expressions;
+
 public class ConstantBoolTerm : Term
 {
     public ConstantBoolTerm(bool value)
@@ -12,4 +14,10 @@ public class ConstantBoolTerm : Term
     public override string ToString() => Value.ToString();
 
     public override List<string> GetStringLiterals() => new();
+    public override List<RegisterTerm> GetUsedRegisters() => new();
+
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+        
+    }
 }

@@ -7,7 +7,7 @@ public class Symbol
         Name = name;
     }
 
-    public Symbol(string name, LatteType latteType)
+    public Symbol(string name, string latteType)
     {
         Name = name;
         LatteType = latteType;
@@ -15,9 +15,9 @@ public class Symbol
 
     public string Name { get; set; }
 
-    public LatteType LatteType { get; set; }
+    public string LatteType { get; set; }
 
     public IScope Scope { get; set; }
 
-    public override string ToString() => LatteType != LatteType.Invalid ? $"[{Name}: {LatteType}]" : $"[{Name}]";
+    public override string ToString() => LatteType != "Invalid" ? $"[{Name}: {LatteType}]" : $"[{Name}]";
 }

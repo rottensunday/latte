@@ -1,5 +1,6 @@
 namespace Latte.Models.Intermediate;
 
+using Compiler;
 using Scopes;
 
 public class IntermediateFunction
@@ -18,9 +19,11 @@ public class IntermediateFunction
     public List<BaseIntermediateInstruction> Instructions { get; set; }
 
     public string Name { get; set; }
+    
+    public List<Block> Blocks { get; set; }
 
     public RegisterTerm GetNextRegister(
-        LatteType type,
+        string type,
         string identifier = null,
         bool isParam = false,
         IScope scope = null) => new($"t{_currentRegister++}", type, identifier, isParam, scope);

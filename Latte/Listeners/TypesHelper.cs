@@ -4,13 +4,18 @@ using Scopes;
 
 public static class TypesHelper
 {
-    public static LatteType TryGetLatteType(string type) =>
+    public static string TryGetLatteType(string type) =>
         type switch
         {
             "boolean" => LatteType.Boolean,
             "int" => LatteType.Int,
             "string" => LatteType.String,
             "void" => LatteType.Void,
-            _ => LatteType.Invalid
+            _ => type
         };
+
+    public static bool IsBasicType(string type)
+    {
+        return type is LatteType.Boolean or LatteType.Int or LatteType.String;
+    }
 }

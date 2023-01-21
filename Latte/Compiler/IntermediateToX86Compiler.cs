@@ -1,13 +1,14 @@
 namespace Latte.Compiler;
 
 using Latte.Models.Intermediate;
+using Listeners;
 using Scopes;
 
 public class IntermediateToX86Compiler
 {
     private readonly Dictionary<string, string> _literalsMap = new();
     private readonly Dictionary<string, int> _registerOffsetMap = new();
-    private readonly List<string> _result = new();
+    private List<string> _result = new();
 
     private int _previousBlock = -3;
     private Dictionary<Register, bool> _marked = new();
@@ -22,48 +23,69 @@ public class IntermediateToX86Compiler
 
     private int _pushes;
     private int _minusOffset;
+    private int _pushedRegistersOffset;
 
-    public IEnumerable<string> Compile(List<IntermediateFunction> functions)
+    private List<ClassSymbol> _classes;
+
+    private HashSet<Register> _registersUsed = new HashSet<Register>();
+    private HashSet<Register> _prevRegistersUsed = new HashSet<Register>();
+
+    public IEnumerable<string> Compile(
+        List<IntermediateFunction> functions,
+        List<ClassSymbol> classes)
     {
+        _classes = classes;
+        var result = new List<string>();
+        
         var literals = functions
             .SelectMany(x => x.Instructions)
             .SelectMany(x => x.GetStringLiterals());
 
         foreach (var literal in literals)
         {
-            AddStringLiteral(literal);
+            result.AddRange(AddStringLiteral(literal));
         }
 
         foreach (var function in functions)
         {
             Reset();
             CompileFunction(function);
+            Reset(); 
+            result.AddRange(CompileFunction(function));
         }
 
-        return _result;
+        return result;
     }
 
-    private void CompileFunction(IntermediateFunction function)
+    private List<string> CompileFunction(IntermediateFunction function)
     {
+        _result = new List<string>();
         _pushes = 0;
-        AddInstruction(GasSymbols.GenerateFunctionSymbol(function.Name));
-        CompileInstructions(function.Instructions, function.Variables);
+        // AddInstruction(GasSymbols.GenerateFunctionSymbol(function.Name));
+        CompileInstructions(function.Instructions, function.Variables, function.Blocks);
 
+        _result = new List<string> { GasSymbols.GenerateFunctionSymbol(function.Name) }.Concat(AddFnProlog())
+            .Concat(_result).ToList();
+        
         if (_result.Last().Contains("RET"))
         {
-            return;
+            return _result;
         }
 
         AddFnEpilog();
+
+        return _result;
     }
 
     private void Reset() => _registerOffsetMap.Clear();
 
     private void CompileInstructions(
         List<BaseIntermediateInstruction> instructions,
-        List<RegisterTerm> variables)
+        List<RegisterTerm> variables,
+        List<Block> blocks)
     {
-        AddFnProlog();
+        // AddFnProlog();
+        _pushedRegistersOffset = _registersUsed.Intersect(GasSymbols.PreservedRegisters).Count() * 8;
 
         var parameters = variables.Where(x => x.IsParam).ToList();
 
@@ -96,9 +118,9 @@ public class IntermediateToX86Compiler
             {
                 minusOffset -= 8;
 
-                AddInstruction(GasSymbols.GenerateMovToOffset(minusOffset - 40, register));
+                AddInstruction(GasSymbols.GenerateMovToOffset(minusOffset - _pushedRegistersOffset, register));
 
-                _registerOffsetMap[parameter.Name] = minusOffset - 40;
+                _registerOffsetMap[parameter.Name] = minusOffset - _pushedRegistersOffset;
             }
         }
 
@@ -116,7 +138,7 @@ public class IntermediateToX86Compiler
         {
             minusOffset -= 8;
 
-            _registerOffsetMap[registerNeeded.Name] = minusOffset - 40;
+            _registerOffsetMap[registerNeeded.Name] = minusOffset - _pushedRegistersOffset;
         }
 
         minusOffset = -minusOffset;
@@ -124,13 +146,19 @@ public class IntermediateToX86Compiler
         minusOffset += (8 - (minusOffset % 8)) % 8;
 
         _minusOffset = minusOffset;
-        AddInstruction(GasSymbols.GenerateSubtract(Register.RSP, minusOffset));
+        
+        if (minusOffset != 0)
+        {
+            AddInstruction(GasSymbols.GenerateSubtract(Register.RSP, minusOffset));
+        }
 
-        _stackAlignedTo = (plusOffset - 8 + minusOffset + 40) % 16;
+        _stackAlignedTo = (plusOffset - 8 + minusOffset + _pushedRegistersOffset) % 16;
 
         bool previousInBool = false;
         bool first = true;
-
+        _prevRegistersUsed = _registersUsed;
+        _registersUsed = new HashSet<Register>();
+        
         foreach (var instruction in instructions)
         {
             if (!first && !previousInBool && instruction.InBoolExpr)
@@ -141,9 +169,20 @@ public class IntermediateToX86Compiler
                     {
                         var sr = _vrToSr[kvp.Value];
 
-                        if (_registerOffsetMap.ContainsKey(sr))
+                        if (instruction is LabelIntermediateInstruction)
                         {
-                            AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[sr], kvp.Key));
+                            if (blocks[instruction.Block - 1].LiveOut.Contains(sr) &&
+                                _registerOffsetMap.TryGetValue(sr, out var value))
+                            {
+                                AddInstruction(GasSymbols.GenerateMovToOffset(value, kvp.Key));
+                            }
+                        }
+                        else
+                        {
+                            if (blocks[instruction.Block].LiveOut.Contains(sr) && _registerOffsetMap.ContainsKey(sr))
+                            {
+                                AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[sr], kvp.Key));
+                            }
                         }
                     }
                 }
@@ -159,7 +198,7 @@ public class IntermediateToX86Compiler
                     instructions.Where(x => x.Block == instruction.Block).ToList());
             }
 
-            CompileInstruction(instruction);
+            CompileInstruction(instruction, blocks[instruction.Block]);
 
             previousInBool = instruction.InBoolExpr;
         }
@@ -175,25 +214,19 @@ public class IntermediateToX86Compiler
         _physicalRegistersStack = new Stack<Register>();
         _marked = new Dictionary<Register, bool>();
         _vrToSr = new Dictionary<string, string>();
-
-        var registersUsed = instructions
-            .OfType<IntermediateInstruction>()
-            .SelectMany(x => new[] { x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm })
-            .Concat(
-                instructions
-                    .OfType<IfIntermediateInstruction>()
-                    .Select(x => x.Condition)
-                    .OfType<RegisterTerm>()
-                    .Where(x => x != null))
-            .Where(x => x != null)
-            .Where(x => x.VirtualRegister != null);
+        
+        var registersUsed = 
+            instructions
+                .SelectMany(x => x.GetOperands().Concat(new List<RegisterTerm> {x.GetTarget()}))
+                .Where(x => x != null)
+                .Where(x => x.VirtualRegister != null);
 
         foreach (var registerUsed in registersUsed)
         {
             _vrToPr[registerUsed.VirtualRegister] = null;
         }
 
-        foreach (var physicalRegister in GasSymbols.PreservedRegisters)
+        foreach (var physicalRegister in GasSymbols.AllocationRegisters)
         {
             _prToVr[physicalRegister] = null;
             _prNu[physicalRegister] = -1;
@@ -202,7 +235,7 @@ public class IntermediateToX86Compiler
         }
     }
 
-    private void CompileInstruction(BaseIntermediateInstruction instruction)
+    private void CompileInstruction(BaseIntermediateInstruction instruction, Block block)
     {
         switch (instruction)
         {
@@ -210,7 +243,7 @@ public class IntermediateToX86Compiler
                 CompileLabelInstruction(labelIntermediateInstruction);
                 break;
             case IntermediateInstruction intermediateInstruction:
-                CompileIntermediateInstruction(intermediateInstruction);
+                CompileIntermediateInstruction(intermediateInstruction, block);
                 break;
             case IfIntermediateInstruction ifIntermediateInstruction:
                 CompileIfIntermediateInstruction(ifIntermediateInstruction);
@@ -224,11 +257,26 @@ public class IntermediateToX86Compiler
                 ? GasSymbols.GenerateUnconditionalJump(labelIntermediateInstruction.LabelTerm.Label)
                 : GasSymbols.GenerateLabel(labelIntermediateInstruction.LabelTerm.Label));
 
-    private void CompileIntermediateInstruction(IntermediateInstruction intermediateInstruction)
+    private void CompileIntermediateInstruction(IntermediateInstruction intermediateInstruction, Block block)
     {
         foreach (var kvp in _marked)
         {
             _marked[kvp.Key] = false;
+        }
+
+        if (intermediateInstruction.FirstOperand is FunctionCallTerm fct)
+        {
+            var argumentRegisters = fct.GetUsedRegisters();
+
+            foreach (var argumentRegister in argumentRegisters)
+            {
+                var pr = _vrToPr[argumentRegister.VirtualRegister];
+
+                if (pr != null)
+                {
+                    argumentRegister.PhysicalRegister = pr.Value;
+                }
+            }
         }
 
         if (intermediateInstruction.FirstOperand is RegisterTerm firstOperand)
@@ -253,6 +301,34 @@ public class IntermediateToX86Compiler
             else
             {
                 firstOperand.PhysicalRegister = pr.Value;
+            }
+
+            _marked[pr.Value] = true;
+        }
+
+        if (intermediateInstruction.FirstOperand is FieldAccessTerm fieldAccessTerm)
+        {
+            var register = fieldAccessTerm.InstanceRegister;
+            _vrToSr[register.VirtualRegister] = register.Name;
+
+            var pr = _vrToPr[register.VirtualRegister];
+
+            if (pr == null)
+            {
+                pr = GetAPr(
+                    register.VirtualRegister,
+                    register.NextUse);
+
+                register.PhysicalRegister = pr.Value;
+
+                AddInstruction(
+                    GasSymbols.GenerateMovFromOffset(
+                        _registerOffsetMap[register.Name],
+                        register.PhysicalRegister));
+            }
+            else
+            {
+                register.PhysicalRegister = pr.Value;
             }
 
             _marked[pr.Value] = true;
@@ -289,7 +365,7 @@ public class IntermediateToX86Compiler
         {
             if (firstOperandNew.NextUse == -1 && _prToVr[firstOperandNew.PhysicalRegister] != null)
             {
-                if (firstOperandNew.Identifier != null)
+                if (firstOperandNew.Identifier != null && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, firstOperandNew.Name) && block.LiveOut.Contains(firstOperandNew.Name))
                 {
                     AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[firstOperandNew.VirtualRegister]], firstOperandNew.PhysicalRegister));
                 }
@@ -297,12 +373,26 @@ public class IntermediateToX86Compiler
                 FreeAPr(firstOperandNew.PhysicalRegister);
             }
         }
+        
+        if (intermediateInstruction.FirstOperand is FieldAccessTerm fieldAccessTermNew)
+        {
+            var register = fieldAccessTermNew.InstanceRegister;
+            if (register.NextUse == -1 && _prToVr[register.PhysicalRegister] != null)
+            {
+                if (register.Identifier != null && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, register.Name) && block.LiveOut.Contains(register.Name))
+                {
+                    AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[register.VirtualRegister]], register.PhysicalRegister));
+                }
+                
+                FreeAPr(register.PhysicalRegister);
+            }
+        }
 
-        if (intermediateInstruction.FirstOperand is RegisterTerm secondOperandNew)
+        if (intermediateInstruction.SecondOperand is RegisterTerm secondOperandNew)
         {
             if (secondOperandNew.NextUse == -1 && _prToVr[secondOperandNew.PhysicalRegister] != null)
             {
-                if (secondOperandNew.Identifier != null)
+                if (secondOperandNew.Identifier != null  && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, secondOperandNew.Name) && block.LiveOut.Contains(secondOperandNew.Name))
                 {
                     AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[secondOperandNew.VirtualRegister]], secondOperandNew.PhysicalRegister));
                 }
@@ -362,6 +452,12 @@ public class IntermediateToX86Compiler
 
         switch (intermediateInstruction.InstructionType)
         {
+            case InstructionType.LhsFieldAccess:
+                GenerateFieldAccess(intermediateInstruction);
+                break;
+            case InstructionType.New:
+                GenerateNew(intermediateInstruction);
+                break;
             case InstructionType.Assignment:
                 GenerateAssignment(intermediateInstruction);
                 break;
@@ -528,6 +624,72 @@ public class IntermediateToX86Compiler
                 : GasSymbols.GenerateJumpNotEqual(ifIntermediateInstruction.JumpLabel.LabelTerm.Label));
     }
 
+    private void GenerateFieldAccess(IntermediateInstruction intermediateInstruction)
+    {
+        if (intermediateInstruction.FirstOperand is not FieldAccessTerm fieldAccessTerm)
+        {
+            throw new Exception();
+        }
+
+        var register = fieldAccessTerm.InstanceRegister;
+        var x = fieldAccessTerm.InnerFieldAccess;
+        var first = true;
+        ClassSymbol currentClass = null;
+
+        while (x != null)
+        {
+            if (first)
+            {
+                AddInstruction(GasSymbols.GenerateMovFromMemory(
+                    register.PhysicalRegister, 
+                    fieldAccessTerm.ClassSymbol.GetFieldOffset(x.ClassField), 
+                    intermediateInstruction.LeftHandSide.PhysicalRegister));
+
+                var fieldSymbol = fieldAccessTerm.ClassSymbol.Fields.FirstOrDefault(y => y.Name == x.ClassField);
+                var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
+
+                if (!isBasicType)
+                {
+                    currentClass = _classes.FirstOrDefault(y => y.Name == fieldSymbol.LatteType);
+                }
+
+                first = false;
+            }
+            else
+            {
+                AddInstruction(GasSymbols.GenerateMovFromMemory(
+                    intermediateInstruction.LeftHandSide.PhysicalRegister,
+                    currentClass.GetFieldOffset(x.ClassField),
+                    intermediateInstruction.LeftHandSide.PhysicalRegister));
+                
+                var fieldSymbol = currentClass.Fields.FirstOrDefault(y => y.Name == x.ClassField);
+                var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
+
+                if (!isBasicType)
+                {
+                    currentClass = _classes.FirstOrDefault(y => y.Name == fieldSymbol.LatteType);
+                }
+            }
+
+            x = x.InnerFieldAccess;
+        }
+    }
+
+    private void GenerateNew(IntermediateInstruction intermediateInstruction)
+    {
+        var type = intermediateInstruction.LeftHandSide.Type;
+        var classPrototype = _classes.FirstOrDefault(x => x.Name == type);
+        var size = classPrototype.Size;
+        
+        AddInstruction($"MOV RDI, {size}");
+        AddInstruction("CALL _malloc");
+
+        if (intermediateInstruction.LeftHandSide.PhysicalRegister != Register.RAX)
+        {
+            AddInstruction($"MOV {intermediateInstruction.LeftHandSide.PhysicalRegister}, RAX");
+        }
+    }
+
     private void GenerateAssignment(IntermediateInstruction intermediateInstruction)
     {
         if (intermediateInstruction.FirstOperand is ConstantIntTerm intTerm)
@@ -558,7 +720,7 @@ public class IntermediateToX86Compiler
                     }
                     else
                     {
-                        _registerOffsetMap[intermediateInstruction.LeftHandSide.Name] = -48;
+                        _registerOffsetMap[intermediateInstruction.LeftHandSide.Name] = -_pushedRegistersOffset - 8;
                     }
                 }
 
@@ -629,6 +791,17 @@ public class IntermediateToX86Compiler
             .Zip(tempRegisters)
             .Count(pair => pair.Second == Register.None);
 
+
+
+        var registersToSave = _vrToPr.Values.Where(x => x != null).Select(x => x.Value).Intersect(GasSymbols.NotPreservedRegisters);
+        var registersToSaveReverse = registersToSave.Reverse();
+
+        foreach (var registerToSave in registersToSave)
+        {
+            pushesCount++;
+            AddInstruction(GasSymbols.GeneratePush(registerToSave));
+        }
+        
         // Based on number of pushes we have to do, do we have to push dummy 8 byte word to
         // align stack?
         var shouldAlignStack = ((pushesCount * 8) + _stackAlignedTo) % 16 != 0;
@@ -690,15 +863,25 @@ public class IntermediateToX86Compiler
                 }
             }
         }
-
+        
         AddInstruction(GasSymbols.GenerateFunctionCall(functionCallTerm.Name));
-
-        var toSubtractFromStack = (pushesCount * 8) + (shouldAlignStack ? 8 : 0);
-
-        if (toSubtractFromStack > 0)
+        
+        if (shouldAlignStack)
         {
-            AddInstruction(GasSymbols.GenerateAdd(Register.RSP, toSubtractFromStack));
+            AddInstruction(GasSymbols.GenerateAdd(Register.RSP, 8));
         }
+
+        foreach (var registerToSave in registersToSaveReverse)
+        {
+            AddInstruction(GasSymbols.GeneratePop(registerToSave));
+        }
+
+        // var toSubtractFromStack = (pushesCount * 8) + (shouldAlignStack ? 8 : 0);
+        //
+        // if (toSubtractFromStack > 0)
+        // {
+        //     AddInstruction(GasSymbols.GenerateAdd(Register.RSP, toSubtractFromStack));
+        // }
 
         if (target == null)
         {
@@ -790,6 +973,10 @@ public class IntermediateToX86Compiler
         var rightRegister = right as RegisterTerm;
         var leftString = left as ConstantStringTerm;
         var rightString = right as ConstantStringTerm;
+        
+        if (_vrToPr.Values.sel)
+        AddInstruction(GasSymbols.GeneratePush(Register.RDI));
+        AddInstruction(GasSymbols.GeneratePush(Register.RSI));
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -809,6 +996,9 @@ public class IntermediateToX86Compiler
 
         AddInstruction(GasSymbols.GenerateFunctionCall("concatStrings"));
         AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+        
+        AddInstruction(GasSymbols.GeneratePop(Register.RSI));
+        AddInstruction(GasSymbols.GeneratePop(Register.RDI));
     }
 
     private void GenerateSubtract(Term left, Term right, RegisterTerm target)
@@ -1170,38 +1360,65 @@ public class IntermediateToX86Compiler
 
     private void AddInstruction(string instruction) => _result.Add(instruction);
 
-    private void AddStringLiteral(string literal)
+    private List<string> AddStringLiteral(string literal)
     {
+        var result = new List<string>();
+        
         if (_literalsMap.ContainsKey(literal))
         {
-            return;
+            return result;
         }
 
         var label = $"str{_literalsMap.Count}";
         _literalsMap[literal] = label;
-        AddInstruction($"{label}:");
-        AddInstruction($".string \"{literal}\"");
+        result.Add($"{label}:");
+        result.Add($".string \"{literal}\"");
+
+        return result;
     }
 
-    private void AddFnProlog()
+    private List<string> AddFnProlog()
     {
-        AddInstruction(GasSymbols.GeneratePush(Register.RBP));
-        AddInstruction(GasSymbols.GenerateMov(Register.RSP, Register.RBP));
-        AddInstruction(GasSymbols.GeneratePush(Register.RBX));
-        AddInstruction(GasSymbols.GeneratePush(Register.R12));
-        AddInstruction(GasSymbols.GeneratePush(Register.R13));
-        AddInstruction(GasSymbols.GeneratePush(Register.R14));
-        AddInstruction(GasSymbols.GeneratePush(Register.R15));
+        var result = new List<string>();
+        
+        result.Add(GasSymbols.GeneratePush(Register.RBP));
+        result.Add(GasSymbols.GenerateMov(Register.RSP, Register.RBP));
+
+        var registersUsedToSave = _registersUsed.Intersect(GasSymbols.PreservedRegisters);
+
+        foreach (var registerToSave in registersUsedToSave)
+        {
+            result.Add(GasSymbols.GeneratePush(registerToSave));
+        }
+        
+        // AddInstruction(GasSymbols.GeneratePush(Register.RBX));
+        // AddInstruction(GasSymbols.GeneratePush(Register.R12));
+        // AddInstruction(GasSymbols.GeneratePush(Register.R13));
+        // AddInstruction(GasSymbols.GeneratePush(Register.R14));
+        // AddInstruction(GasSymbols.GeneratePush(Register.R15));
+
+        return result;
     }
 
     private void AddFnEpilog()
     {
-        AddInstruction(GasSymbols.GenerateAdd(Register.RSP, _pushes * 8 + _minusOffset));
-        AddInstruction(GasSymbols.GeneratePop(Register.R15));
-        AddInstruction(GasSymbols.GeneratePop(Register.R14));
-        AddInstruction(GasSymbols.GeneratePop(Register.R13));
-        AddInstruction(GasSymbols.GeneratePop(Register.R12));
-        AddInstruction(GasSymbols.GeneratePop(Register.RBX));
+        if (_pushes * 8 + _minusOffset > 0)
+        {
+            AddInstruction(GasSymbols.GenerateAdd(Register.RSP, _pushes * 8 + _minusOffset));
+        }
+        
+        var registersUsedToSave = _prevRegistersUsed.Intersect(GasSymbols.PreservedRegisters).Reverse();
+        
+        foreach (var registerToSave in registersUsedToSave)
+        {
+            AddInstruction(GasSymbols.GeneratePop(registerToSave));
+        }
+        
+        // AddInstruction(GasSymbols.GeneratePop(Register.R15));
+        // AddInstruction(GasSymbols.GeneratePop(Register.R14));
+        // AddInstruction(GasSymbols.GeneratePop(Register.R13));
+        // AddInstruction(GasSymbols.GeneratePop(Register.R12));
+        // AddInstruction(GasSymbols.GeneratePop(Register.RBX));
         AddInstruction(GasSymbols.GenerateMov(Register.RBP, Register.RSP));
         AddInstruction(GasSymbols.GeneratePop(Register.RBP));
         AddInstruction(GasSymbols.GenerateRet());
@@ -1240,7 +1457,7 @@ public class IntermediateToX86Compiler
                 }
                 else
                 {
-                    _registerOffsetMap[sr] = -48;
+                    _registerOffsetMap[sr] = -_pushedRegistersOffset - 8;
                 }
             }
             else
@@ -1250,6 +1467,8 @@ public class IntermediateToX86Compiler
 
             _vrToPr[spilledVr] = null;
         }
+
+        _registersUsed.Add(result);
 
         _vrToPr[vr] = result;
         _prToVr[result] = vr;

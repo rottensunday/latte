@@ -43,4 +43,13 @@ public class FunctionCallTerm : Term
     }
 
     public override List<string> GetStringLiterals() => Arguments.SelectMany(x => x.GetStringLiterals()).ToList();
+    
+    public override List<RegisterTerm> GetUsedRegisters() => Arguments.SelectMany(x => x.GetUsedRegisters()).ToList();
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+        foreach (var argument in Arguments)
+        {
+            argument.SwitchRegisters(used, newRegister);
+        }
+    }
 }

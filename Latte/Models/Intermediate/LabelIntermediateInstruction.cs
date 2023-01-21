@@ -16,4 +16,11 @@ public class LabelIntermediateInstruction : BaseIntermediateInstruction
     public override string ToString() => !IsJump ? $"{LabelTerm.Label}:" + $"  block {Block}" + $"      {InBoolExpr}" : $"jmp {LabelTerm.Label}" + $"  block {Block}" + $"      {InBoolExpr}";
 
     public override List<string> GetStringLiterals() => new();
+    public override List<RegisterTerm> GetOperands() => new List<RegisterTerm>();
+
+    public override RegisterTerm GetTarget() => null;
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+        
+    }
 }

@@ -12,4 +12,8 @@ public class ConstantStringTerm : Term
     public override string ToString() => $"\"{Value}\"";
 
     public override List<string> GetStringLiterals() => new() { Value };
+    public override List<RegisterTerm> GetUsedRegisters() => new();
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+    }
 }

@@ -28,4 +28,20 @@ public class IfIntermediateInstruction : BaseIntermediateInstruction
         $"if {(Negate ? "!" : "")}({Condition}) then jumpto {JumpLabel.LabelTerm.Label}" + $"  block {Block}" + $"      {InBoolExpr}";
 
     public override List<string> GetStringLiterals() => Condition.GetStringLiterals().ToList();
+    
+    public override List<RegisterTerm> GetOperands()
+    {
+        if (Condition is RegisterTerm rt)
+        {
+            return new List<RegisterTerm> { rt };
+        }
+
+        return new List<RegisterTerm>();
+    }
+
+    public override RegisterTerm GetTarget() => null;
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+        Condition.SwitchRegisters(used, newRegister);
+    }
 }

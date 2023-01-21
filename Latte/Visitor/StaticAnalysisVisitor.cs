@@ -13,13 +13,13 @@ public class StaticAnalysisVisitor : LatteBaseVisitor<CompilationResult>
     private readonly List<CompilationError> _errors = new();
     private readonly GlobalScope _globals;
     private readonly ParseTreeProperty<IScope> _scopes;
-    private readonly ParseTreeProperty<LatteType> _types;
+    private readonly ParseTreeProperty<string> _types;
     private IScope _currentScope;
 
     public StaticAnalysisVisitor(
         GlobalScope globals,
         ParseTreeProperty<IScope> scopes,
-        ParseTreeProperty<LatteType> types,
+        ParseTreeProperty<string> types,
         ParseTreeProperty<IConstExpression> constantExpressions)
     {
         _scopes = scopes;
@@ -38,7 +38,7 @@ public class StaticAnalysisVisitor : LatteBaseVisitor<CompilationResult>
         return result;
     }
 
-    public override CompilationResult VisitTopDef(LatteParser.TopDefContext context)
+    public override CompilationResult VisitTopDefFunction(LatteParser.TopDefFunctionContext context)
     {
         _currentScope = _scopes.Get(context);
         var parametersNodes = context.arg()?.ID();
@@ -92,41 +92,85 @@ public class StaticAnalysisVisitor : LatteBaseVisitor<CompilationResult>
 
     public override CompilationResult VisitAss(LatteParser.AssContext context)
     {
-        var name = context.ID().GetText();
-        var symbol = _currentScope.Resolve(name);
-        var expr = context.expr();
-        var exprType = _types.Get(expr);
-
-        switch (symbol)
+        if (context.lhs() is LatteParser.IdLhsContext idContext)
         {
-            case null:
+            var name = idContext.ID().GetText();
+            var symbol = _currentScope.Resolve(name);
+            var expr = context.expr();
+            var exprType = _types.Get(expr);
+
+            switch (symbol)
+            {
+                case null:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.UndefinedReference,
+                            idContext.ID().Symbol,
+                            $"{name} not found"));
+                    break;
+                case FunctionSymbol:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.NotAVariable,
+                            idContext.ID().Symbol,
+                            $"{name} is a function"));
+                    break;
+            }
+
+            if (symbol != null && symbol.LatteType != exprType)
+            {
                 _errors.Add(
                     new CompilationError(
-                        CompilationErrorType.UndefinedReference,
-                        context.ID().Symbol,
-                        $"{name} not found"));
-                break;
-            case FunctionSymbol:
+                        CompilationErrorType.TypeMismatch,
+                        expr.Start,
+                        $"Expected rvalue of type {symbol.LatteType}, found: {exprType}"));
+            }
+
+            var result = VisitChildren(context);
+
+            return result;
+        }
+
+        if (context.lhs() is LatteParser.FieldAccessLHSContext lhsContext)
+        {
+            var name = lhsContext.ID().GetText();
+            var symbol = _currentScope.Resolve(name);
+            var expr = context.expr();
+            var exprType = _types.Get(expr);
+
+            switch (symbol)
+            {
+                case null:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.UndefinedReference,
+                            lhsContext.ID().Symbol,
+                            $"{name} not found"));
+                    break;
+                case FunctionSymbol:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.NotAVariable,
+                            lhsContext.ID().Symbol,
+                            $"{name} is a function"));
+                    break;
+            }
+
+            if (_types.Get(lhsContext) != exprType)
+            {
                 _errors.Add(
                     new CompilationError(
-                        CompilationErrorType.NotAVariable,
-                        context.ID().Symbol,
-                        $"{name} is a function"));
-                break;
+                        CompilationErrorType.TypeMismatch,
+                        expr.Start,
+                        $"Expected rvalue of type {symbol.LatteType}, found: {exprType}"));
+            }
+
+            var result = VisitChildren(context);
+
+            return result;
         }
 
-        if (symbol != null && symbol.LatteType != exprType)
-        {
-            _errors.Add(
-                new CompilationError(
-                    CompilationErrorType.TypeMismatch,
-                    expr.Start,
-                    $"Expected rvalue of type {symbol.LatteType}, found: {exprType}"));
-        }
-
-        var result = VisitChildren(context);
-
-        return result;
+        return null;
     }
 
     public override CompilationResult VisitDecl(LatteParser.DeclContext context)
@@ -163,72 +207,152 @@ public class StaticAnalysisVisitor : LatteBaseVisitor<CompilationResult>
 
     public override CompilationResult VisitIncr(LatteParser.IncrContext context)
     {
-        var name = context.ID().GetText();
-        var symbol = _currentScope.Resolve(name);
-
-        switch (symbol)
+        if (context.lhs() is LatteParser.IdLhsContext idContext)
         {
-            case null:
-                _errors.Add(
-                    new CompilationError(
-                        CompilationErrorType.UndefinedReference,
-                        context.ID().Symbol,
-                        $"{name} not found"));
-                break;
-            case FunctionSymbol:
-                _errors.Add(
-                    new CompilationError(
-                        CompilationErrorType.NotAVariable,
-                        context.ID().Symbol,
-                        $"{name} is a function"));
-                break;
-            case VariableSymbol x when x.LatteType != LatteType.Int:
-                _errors.Add(
-                    new CompilationError(
-                        CompilationErrorType.TypeMismatch,
-                        context.ID().Symbol,
-                        $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
-                break;
+            var name = idContext.ID().GetText();
+            var symbol = _currentScope.Resolve(name);
+
+            switch (symbol)
+            {
+                case null:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.UndefinedReference,
+                            idContext.ID().Symbol,
+                            $"{name} not found"));
+                    break;
+                case FunctionSymbol:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.NotAVariable,
+                            idContext.ID().Symbol,
+                            $"{name} is a function"));
+                    break;
+                case VariableSymbol x when x.LatteType != LatteType.Int:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.TypeMismatch,
+                            idContext.ID().Symbol,
+                            $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
+                    break;
+            }
+
+            var result = VisitChildren(context);
+
+            return result;
         }
 
-        var result = VisitChildren(context);
+        if (context.lhs() is LatteParser.FieldAccessLHSContext lhsContext)
+        {
+            var name = lhsContext.ID().GetText();
+            var symbol = _currentScope.Resolve(name);
 
-        return result;
+            switch (symbol)
+            {
+                case null:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.UndefinedReference,
+                            lhsContext.ID().Symbol,
+                            $"{name} not found"));
+                    break;
+                case FunctionSymbol:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.NotAVariable,
+                            lhsContext.ID().Symbol,
+                            $"{name} is a function"));
+                    break;
+                case VariableSymbol x when x.LatteType != LatteType.Int:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.TypeMismatch,
+                            lhsContext.ID().Symbol,
+                            $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
+                    break;
+            }
+
+            var result = VisitChildren(context);
+
+            return result;
+        }
+
+        return null;
     }
 
     public override CompilationResult VisitDecr(LatteParser.DecrContext context)
     {
-        var name = context.ID().GetText();
-        var symbol = _currentScope.Resolve(name);
-
-        switch (symbol)
+        if (context.lhs() is LatteParser.IdLhsContext idContext)
         {
-            case null:
-                _errors.Add(
-                    new CompilationError(
-                        CompilationErrorType.UndefinedReference,
-                        context.ID().Symbol,
-                        $"{name} not found"));
-                break;
-            case FunctionSymbol:
-                _errors.Add(
-                    new CompilationError(
-                        CompilationErrorType.NotAVariable,
-                        context.ID().Symbol,
-                        $"{name} is a function"));
-                break;
-            case VariableSymbol x when x.LatteType != LatteType.Int:
-                _errors.Add(
-                    new CompilationError(
-                        CompilationErrorType.TypeMismatch,
-                        context.ID().Symbol,
-                        $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
-                break;
+            var name = idContext.ID().GetText();
+            var symbol = _currentScope.Resolve(name);
+
+            switch (symbol)
+            {
+                case null:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.UndefinedReference,
+                            idContext.ID().Symbol,
+                            $"{name} not found"));
+                    break;
+                case FunctionSymbol:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.NotAVariable,
+                            idContext.ID().Symbol,
+                            $"{name} is a function"));
+                    break;
+                case VariableSymbol x when x.LatteType != LatteType.Int:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.TypeMismatch,
+                            idContext.ID().Symbol,
+                            $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
+                    break;
+            }
+
+            var result = VisitChildren(context);
+
+            return result;
         }
 
-        var result = VisitChildren(context);
+        if (context.lhs() is LatteParser.FieldAccessLHSContext lhsContext)
+        {
+            var name = lhsContext.ID().GetText();
+            var symbol = _currentScope.Resolve(name);
 
-        return result;
+            switch (symbol)
+            {
+                case null:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.UndefinedReference,
+                            lhsContext.ID().Symbol,
+                            $"{name} not found"));
+                    break;
+                case FunctionSymbol:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.NotAVariable,
+                            lhsContext.ID().Symbol,
+                            $"{name} is a function"));
+                    break;
+                case VariableSymbol x when x.LatteType != LatteType.Int:
+                    _errors.Add(
+                        new CompilationError(
+                            CompilationErrorType.TypeMismatch,
+                            lhsContext.ID().Symbol,
+                            $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
+                    break;
+            }
+
+            var result = VisitChildren(context);
+
+            return result;
+        }
+
+        return null;
     }
 
     public override CompilationResult VisitEId(LatteParser.EIdContext context)

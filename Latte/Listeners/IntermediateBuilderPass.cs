@@ -2,6 +2,7 @@ namespace Latte.Listeners;
 
 using Antlr4.Runtime;
 using Antlr4.Runtime.Tree;
+using Compiler;
 using Extensions;
 using Models;
 using Models.ConstExpression;
@@ -27,7 +28,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toJumpAfterLabels = new();
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toJumpBodyLabels = new();
     private readonly ParseTreeProperty<LabelIntermediateInstruction> _toJumpEndElseLabels = new();
-    private readonly ParseTreeProperty<LatteType> _types;
+    private readonly ParseTreeProperty<string> _types;
 
     public readonly List<IntermediateFunction> IntermediateFunctions = new();
     private int _currentBlock;
@@ -40,7 +41,7 @@ public class IntermediateBuilderPass : LatteBaseListener
     public IntermediateBuilderPass(
         GlobalScope globals,
         ParseTreeProperty<IScope> scopes,
-        ParseTreeProperty<LatteType> types,
+        ParseTreeProperty<string> types,
         ParseTreeProperty<IConstExpression> constantExpressions)
     {
         _scopes = scopes;
@@ -51,7 +52,7 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void EnterProgram(LatteParser.ProgramContext context) => _currentScope = _globals;
 
-    public override void EnterTopDef(LatteParser.TopDefContext context)
+    public override void EnterTopDefFunction(LatteParser.TopDefFunctionContext context)
     {
         _currentScope = _scopes.Get(context);
         _currentFunction = new IntermediateFunction(context.ID().Symbol.Text);
@@ -67,7 +68,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         _currentBlock++;
     }
 
-    public override void ExitTopDef(LatteParser.TopDefContext context)
+    public override void ExitTopDefFunction(LatteParser.TopDefFunctionContext context)
     {
         _currentScope = _currentScope.GetEnclosingScope();
         var newInstructions = new List<BaseIntermediateInstruction>(_currentFunction.Instructions);
@@ -134,6 +135,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         }
 
         _currentFunction.Instructions = newInstructions;
+        FlowAnalyzer.RefreshInstructions(_currentFunction);
         IntermediateFunctions.Add(_currentFunction);
     }
 
@@ -183,38 +185,74 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void ExitIncr(LatteParser.IncrContext context)
     {
-        var identifier = context.ID().Symbol.Text;
-
-        if (!_currentFunction.TryGetVariable(identifier, _currentScope, out var registerTerm))
+        if (context.lhs() is LatteParser.IdLhsContext idLhsContext)
         {
-            throw new Exception("No variable to increment");
-        }
+            var identifier = idLhsContext.ID().Symbol.Text;
 
-        _currentFunction.Instructions.Add(
-            new IntermediateInstruction(
-                registerTerm,
-                registerTerm,
-                InstructionType.Increment,
-                null,
-                _currentBlock));
+            if (!_currentFunction.TryGetVariable(identifier, _currentScope, out var registerTerm))
+            {
+                throw new Exception("No variable to increment");
+            }
+
+            _currentFunction.Instructions.Add(
+                new IntermediateInstruction(
+                    registerTerm,
+                    registerTerm,
+                    InstructionType.Increment,
+                    null,
+                    _currentBlock));
+        } 
+        else if (context.lhs() is LatteParser.FieldAccessLHSContext fieldAccessLhsContext)
+        {
+            var addressRegister = _termsStack.Pop();
+
+            if (addressRegister is RegisterTerm registerTerm)
+            {
+                _currentFunction.Instructions.Add(
+                    new IntermediateInstruction(
+                        registerTerm,
+                        registerTerm,
+                        InstructionType.Increment,
+                        null,
+                        _currentBlock));
+            }
+        }
     }
 
     public override void ExitDecr(LatteParser.DecrContext context)
     {
-        var identifier = context.ID().Symbol.Text;
-
-        if (!_currentFunction.TryGetVariable(identifier, _currentScope, out var registerTerm))
+        if (context.lhs() is LatteParser.IdLhsContext idLhsContext)
         {
-            throw new Exception("No variable to decrement");
-        }
+            var identifier = idLhsContext.ID().Symbol.Text;
 
-        _currentFunction.Instructions.Add(
-            new IntermediateInstruction(
-                registerTerm,
-                registerTerm,
-                InstructionType.Decrement,
-                null,
-                _currentBlock));
+            if (!_currentFunction.TryGetVariable(identifier, _currentScope, out var registerTerm))
+            {
+                throw new Exception("No variable to decrement");
+            }
+
+            _currentFunction.Instructions.Add(
+                new IntermediateInstruction(
+                    registerTerm,
+                    registerTerm,
+                    InstructionType.Decrement,
+                    null,
+                    _currentBlock));
+        }
+        else if (context.lhs() is LatteParser.FieldAccessLHSContext fieldAccessLhsContext)
+        {
+            var addressRegister = _termsStack.Pop();
+
+            if (addressRegister is RegisterTerm registerTerm)
+            {
+                _currentFunction.Instructions.Add(
+                    new IntermediateInstruction(
+                        registerTerm,
+                        registerTerm,
+                        InstructionType.Decrement,
+                        null,
+                        _currentBlock));
+            }
+        }
     }
 
     public override void EnterEUnOp(LatteParser.EUnOpContext context)
@@ -608,6 +646,153 @@ public class IntermediateBuilderPass : LatteBaseListener
         _termsStack.Push(term);
     }
 
+    public override void ExitEFieldAccessRHS(LatteParser.EFieldAccessRHSContext context)
+    {
+        var name = context.ID().GetText();
+        var symbol = _currentScope.Resolve(name);
+
+        if (symbol is not VariableSymbol vs)
+        {
+            throw new Exception($"Can't find class instance {name} to get property");
+        }
+
+        var classSymbol = _currentScope.Resolve(symbol.LatteType);
+
+        if (classSymbol is not ClassSymbol cs)
+        {
+            throw new Exception($"Can't find class {symbol.LatteType} to get property");
+        }
+        
+        if (!_currentFunction.TryGetVariable(name, _currentScope, out var classInstanceRegister))
+        {
+            throw new Exception("Register for instance not found");
+        }
+
+        var register = _currentFunction.GetNextRegister(_types.Get(context));
+        // register.MemoryAddress = true;
+        var fieldAccess = new FieldAccess();
+        var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister);
+        var instruction = new IntermediateInstruction(
+            register,
+            fieldAccessTerm,
+            InstructionType.RhsFieldAccess,
+            null,
+            _currentBlock);
+        
+        _currentFunction.Instructions.Add(instruction);
+
+        VisitInnerFieldAccess(context.fieldAccess(), cs, fieldAccess);
+        
+        _termsStack.Push(register);
+        
+        // var identifierType = _types.Get(context);
+        // var lhs = context.ID().Symbol.Text;
+        //
+        // if (_currentFunction.TryGetVariable(lhs, _currentScope, out var variableRegister))
+        // {
+        //     if (_isAndOperand.Get(context))
+        //     {
+        //         _currentFunction.Instructions.Add(
+        //             new IfIntermediateInstruction(
+        //                 variableRegister,
+        //                 _toJumpAfterLabels.Get(context),
+        //                 _currentBlock,
+        //                 negate: _negateContext.Get(context) == false));
+        //     }
+        //     else if (_isOrOperand.Get(context))
+        //     {
+        //         _currentFunction.Instructions.Add(
+        //             new IfIntermediateInstruction(
+        //                 variableRegister,
+        //                 _toJumpBodyLabels.Get(context),
+        //                 _currentBlock,
+        //                 negate: _negateContext.Get(context)));
+        //     }
+        //
+        //     _termsStack.Push(variableRegister);
+        //
+        //     return;
+        // }
+    }
+
+    public override void ExitFieldAccessLHS(LatteParser.FieldAccessLHSContext context)
+    {
+        var name = context.ID().GetText();
+        var symbol = _currentScope.Resolve(name);
+
+        if (symbol is not VariableSymbol vs)
+        {
+            throw new Exception($"Can't find class instance {name} to get property");
+        }
+
+        var classSymbol = _currentScope.Resolve(symbol.LatteType);
+
+        if (classSymbol is not ClassSymbol cs)
+        {
+            throw new Exception($"Can't find class {symbol.LatteType} to get property");
+        }
+        
+        if (!_currentFunction.TryGetVariable(name, _currentScope, out var classInstanceRegister))
+        {
+            throw new Exception("Register for instance not found");
+        }
+
+        var register = _currentFunction.GetNextRegister(_types.Get(context));
+        register.MemoryAddress = true;
+        var fieldAccess = new FieldAccess();
+        var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister);
+        var instruction = new IntermediateInstruction(
+            register,
+            fieldAccessTerm,
+            InstructionType.LhsFieldAccess,
+            null,
+            _currentBlock);
+        
+        _currentFunction.Instructions.Add(instruction);
+
+        VisitInnerFieldAccess(context.fieldAccess(), cs, fieldAccess);
+        
+        _termsStack.Push(register);
+    }
+    
+    private void VisitInnerFieldAccess(
+        LatteParser.FieldAccessContext context, 
+        ClassSymbol cs, 
+        FieldAccess currentFieldAccess)
+    {
+        ITerminalNode? field;
+        Symbol? fieldSymbol;
+        
+        if (context.fieldAccess() == null)
+        {
+            field = context.ID();
+            fieldSymbol = cs.Fields.FirstOrDefault(x => x.Name == field.GetText());
+
+            currentFieldAccess.ClassField = fieldSymbol.Name;
+            currentFieldAccess.InnerFieldAccess = null;
+
+            return;
+        }
+
+        var innerObj = context.ID().GetText();
+        var name = cs.Fields.FirstOrDefault(x => x.Name == innerObj).LatteType;
+        var innerObjSymbol = _currentScope.Resolve(name);
+        
+        field = context.ID();
+        fieldSymbol = cs.Fields.FirstOrDefault(x => x.Name == field.GetText());
+
+        if (innerObjSymbol is not ClassSymbol innerCs)
+        {
+            throw new Exception($"Can't find class {innerObj} to get property");
+        }
+
+        var newFieldAccess = new FieldAccess();
+        currentFieldAccess.ClassField = fieldSymbol.Name;
+        currentFieldAccess.InnerFieldAccess = newFieldAccess;
+
+        VisitInnerFieldAccess(context.fieldAccess(), innerCs, newFieldAccess);
+    }
+
     public override void EnterEId(LatteParser.EIdContext context)
     {
         var identifierType = _types.Get(context);
@@ -828,41 +1013,60 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void ExitAss(LatteParser.AssContext context)
     {
-        var rhsType = _types.Get(context.expr());
-        var lhs = context.ID().Symbol.Text;
-        var rhs = _termsStack.Pop();
-
-        if (_currentFunction.TryGetVariable(lhs, _currentScope, out var variableRegister))
+        if (context.lhs() is LatteParser.IdLhsContext idLhsContext)
         {
-            if (rhs is RegisterTerm rt && !_currentFunction.TryGetVariable(rt.Identifier, _currentScope, out _))
+            var rhsType = _types.Get(context.expr());
+            var lhs = idLhsContext.ID().Symbol.Text;
+            var rhs = _termsStack.Pop();
+
+            if (_currentFunction.TryGetVariable(lhs, _currentScope, out var variableRegister))
             {
-                (_currentFunction.Instructions.Last() as IntermediateInstruction).LeftHandSide = variableRegister;
+                if (rhs is RegisterTerm rt && !_currentFunction.TryGetVariable(rt.Identifier, _currentScope, out _))
+                {
+                    (_currentFunction.Instructions.Last() as IntermediateInstruction).LeftHandSide = variableRegister;
+                }
+                else
+                {
+                    _currentFunction.Instructions.Add(
+                        new IntermediateInstruction(
+                            variableRegister,
+                            rhs,
+                            InstructionType.Assignment,
+                            null,
+                            _currentBlock));
+                }
+
+                return;
             }
-            else
+
+            var register = _currentFunction.GetNextRegister(rhsType, idLhsContext.ID().Symbol.Text, scope: _currentScope);
+
+            _currentFunction.Instructions.Add(
+                new IntermediateInstruction(
+                    register,
+                    rhs,
+                    InstructionType.Assignment,
+                    null,
+                    _currentBlock));
+
+            _currentFunction.Variables.Add(register);
+        }
+        else
+        {
+            var rhs = _termsStack.Pop();
+            var lhs = _termsStack.Pop();
+
+            if (lhs is RegisterTerm rt)
             {
                 _currentFunction.Instructions.Add(
                     new IntermediateInstruction(
-                        variableRegister,
+                        rt,
                         rhs,
                         InstructionType.Assignment,
                         null,
                         _currentBlock));
             }
-
-            return;
         }
-
-        var register = _currentFunction.GetNextRegister(rhsType, context.ID().Symbol.Text, scope: _currentScope);
-
-        _currentFunction.Instructions.Add(
-            new IntermediateInstruction(
-                register,
-                rhs,
-                InstructionType.Assignment,
-                null,
-                _currentBlock));
-
-        _currentFunction.Variables.Add(register);
     }
 
     public override void ExitAssDecl(LatteParser.AssDeclContext context)
@@ -894,14 +1098,21 @@ public class IntermediateBuilderPass : LatteBaseListener
     public override void ExitSimpleDecl(LatteParser.SimpleDeclContext context)
     {
         var type = _types.Get(context);
+
+        if (type == null)
+        {
+            return;
+        }
+        
         var register = _currentFunction.GetNextRegister(type, context.ID().Symbol.Text, scope: _currentScope);
+        
         Term term = type switch
         {
             LatteType.Boolean => new ConstantBoolTerm(false),
             LatteType.Int => new ConstantIntTerm(0),
-            LatteType.String => new ConstantStringTerm("")
+            LatteType.String => new ConstantStringTerm(""),
+            _ => new ConstantNullTerm()
         };
-
 
         _currentFunction.Instructions.Add(
             new IntermediateInstruction(
@@ -972,6 +1183,19 @@ public class IntermediateBuilderPass : LatteBaseListener
         _toJumpAfterLabels.Put(context.expr(), exitElseLabel);
 
         _toHandleCond.Put(context.stmt(), exitLabel);
+    }
+
+    public override void ExitENew(LatteParser.ENewContext context)
+    {
+        var nextRegister = _currentFunction.GetNextRegister(_types.Get(context));
+        _currentFunction.Instructions.Add(new IntermediateInstruction(
+            nextRegister, 
+            null, 
+            InstructionType.New, 
+            null, 
+            _currentBlock));
+        
+        _termsStack.Push(nextRegister);
     }
 
     public override void EnterEveryRule(ParserRuleContext context)

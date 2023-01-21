@@ -35,7 +35,11 @@ public enum Register
     R12B,
     R13B,
     R14B,
-    R15B
+    R15B,
+    R10,
+    R11,
+    R10B,
+    R11B
 }
 
 public static class RegisterExtensions
@@ -56,7 +60,9 @@ public static class RegisterExtensions
             Register.R13 => Register.R13B,
             Register.R14 => Register.R14B,
             Register.R15 => Register.R15B,
-            Register.RBX => Register.BL
+            Register.RBX => Register.BL,
+            Register.R10 => Register.R10B,
+            Register.R11 => Register.R11B
         };
 }
 
@@ -91,12 +97,52 @@ public static class GasSymbols
         Register.R14,
         Register.R15
     };
+    
+    public static readonly List<Register> NotPreservedRegisters = new()
+    {
+        Register.RDI,
+        Register.RSI,
+        Register.RDX,
+        Register.RCX,
+        Register.R8,
+        Register.R9,
+        Register.R10,
+        Register.R11
+    };
+
+    public static readonly List<Register> AllocationRegisters = new()
+    {
+        // Register.RCX,
+        //
+        // Register.R8,
+        // Register.R9,
+        // Register.R10,
+        Register.R11,
+        Register.RDI,
+        // Register.RSI,
+        // Register.RDX,
+        // Register.RBX,
+        // Register.R12,
+        // Register.R13,
+        // Register.R14,
+        // Register.R15,
+    };
 
     public static string GenerateFunctionSymbol(string name) => $"_{name}:";
 
     public static string GenerateFunctionCall(string name) => $"CALL _{name}";
 
     public static string GenerateMov(Register from, Register to) => $"MOV {to}, {from}";
+
+    public static string GenerateMovFromMemory(Register baseRegister, int offset, Register targetRegister)
+    {
+        if (offset == 0)
+        {
+            return $"MOV {targetRegister}, [{baseRegister}]";
+        }
+
+        return $"MOV {targetRegister}, [{baseRegister}+{offset}]";
+    }
 
     public static string GenerateMov(int value, Register to) => $"MOV {to}, {value}";
 
@@ -161,8 +207,10 @@ public static class GasSymbols
     {
         var result = $"MOV RAX, {left}\n";
         result += "CQO \n";
+        result += "PUSH RDI\n";
         result += $"{GenerateMov(right, Register.RDI)}\n";
-        result += $"IDIV RDI";
+        result += $"IDIV RDI\n";
+        result += "POP RDI";
 
         return result;
     }

@@ -1,10 +1,10 @@
 namespace Latte.Scopes;
 
-public enum LatteType
+public static class LatteType
 {
-    Invalid,
-    Void,
-    Int,
-    String,
-    Boolean
+    public const string Invalid = "Invalid";
+    public const string Void = "Void";
+    public const string Int = "Int";
+    public const string String = "String";
+    public const string Boolean = "Boolean";
 }

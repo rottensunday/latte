@@ -21,9 +21,9 @@ public class ConstPass : LatteBaseListener
 
     public override void EnterProgram(LatteParser.ProgramContext context) => _currentScope = _globals;
 
-    public override void EnterTopDef(LatteParser.TopDefContext context) => _currentScope = _scopes.Get(context);
+    public override void EnterTopDefFunction(LatteParser.TopDefFunctionContext context) => _currentScope = _scopes.Get(context);
 
-    public override void ExitTopDef(LatteParser.TopDefContext context) =>
+    public override void ExitTopDefFunction(LatteParser.TopDefFunctionContext context) =>
         _currentScope = _currentScope.GetEnclosingScope();
 
     public override void EnterBlock(LatteParser.BlockContext context) => _currentScope = _scopes.Get(context);

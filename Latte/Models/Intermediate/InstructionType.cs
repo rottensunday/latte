@@ -24,5 +24,9 @@ public enum InstructionType
     And,
     Or,
     FunctionCall,
-    Jump
+    Jump,
+    New,
+    Null,
+    LhsFieldAccess,
+    RhsFieldAccess
 }

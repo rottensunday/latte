@@ -1,6 +1,16 @@
-int d() { return 0;}
-int s(int x) {return x + 1;}
 int main() {
-   printInt(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(s(d())))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))));  
-  return 0;
+        printInt(ifac(10));
+        return 0 ;
+}
+
+int ifac(int n) { return ifac2f(1,n); }
+
+int ifac2f(int l, int h) {
+        if (l == h)
+          return l;
+        if (l > h)
+          return 1;
+        int m;
+        m = (l + h) / 2;
+        return ifac2f(l,m) * ifac2f(m+1,h);
 }

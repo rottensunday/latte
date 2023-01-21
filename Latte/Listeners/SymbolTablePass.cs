@@ -10,8 +10,9 @@ public class SymbolTablePass : LatteBaseListener
     public IScope CurrentScope;
     public List<CompilationError> Errors = new();
     public GlobalScope Globals;
+    public List<ClassSymbol> Classes = new();
     public ParseTreeProperty<IScope> Scopes = new();
-    public ParseTreeProperty<LatteType> Types = new();
+    public ParseTreeProperty<string> Types = new();
 
     public override void EnterProgram(LatteParser.ProgramContext context)
     {
@@ -42,7 +43,7 @@ public class SymbolTablePass : LatteBaseListener
             new FunctionSymbol("readString", LatteType.String, CurrentScope));
     }
 
-    public override void EnterTopDef(LatteParser.TopDefContext context)
+    public override void EnterTopDefFunction(LatteParser.TopDefFunctionContext context)
     {
         var name = context.ID().GetText();
         var typeParsed = context.type_().GetText();
@@ -54,8 +55,33 @@ public class SymbolTablePass : LatteBaseListener
         CurrentScope = functionSymbol;
     }
 
-    public override void ExitTopDef(LatteParser.TopDefContext context) =>
+    public override void ExitTopDefFunction(LatteParser.TopDefFunctionContext context) =>
         CurrentScope = CurrentScope.GetEnclosingScope();
+
+    public override void ExitTopDefClass(LatteParser.TopDefClassContext context)
+    {
+        var name = context.ID().GetText();
+        var existingClass = Globals.Resolve(name);
+
+        if (existingClass != null)
+        {
+            throw new Exception("class can't be defined - symbol already defined");
+        }
+
+        var fields = new List<Symbol>();
+
+        foreach (var decl in context.classDecl())
+        {
+            foreach (var item in decl.item())
+            {
+                fields.Add(new Symbol(item.GetText(), TypesHelper.TryGetLatteType(decl.type_().GetText())));
+            }
+        }
+
+        var classEntry = new ClassSymbol(name, fields);
+        Globals.Define(classEntry);
+        Classes.Add(classEntry);
+    }
 
     public override void EnterBlock(LatteParser.BlockContext context)
     {
@@ -116,7 +142,7 @@ public class SymbolTablePass : LatteBaseListener
         }
     }
 
-    private void DefineVar(string name, LatteType type, IToken token)
+    private void DefineVar(string name, string type, IToken token)
     {
         if (CurrentScope.ResolveFlat(name) != null)
         {

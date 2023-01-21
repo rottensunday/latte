@@ -49,6 +49,9 @@ public class IntermediateInstruction : BaseIntermediateInstruction
             InstructionType.NegateInt => $"{LeftHandSide} = -{FirstOperand}",
             InstructionType.FunctionCall => $"{LeftHandSide} = {FirstOperand}",
             InstructionType.Jump => $"jmp {FirstOperand}",
+            InstructionType.New => $"{LeftHandSide} = new {LeftHandSide.Type}",
+            InstructionType.Null => $"",
+            // InstructionType.FieldAccess => $"{LeftHandSide} = {FirstOperand}",
             InstructionType.None => FirstOperand.ToString()
         } + $"  block {Block}" + $"      {InBoolExpr}";
 
@@ -58,5 +61,29 @@ public class IntermediateInstruction : BaseIntermediateInstruction
         var secondOperandLiterals = SecondOperand?.GetStringLiterals() ?? new List<string>();
 
         return firstOperandLiterals.Concat(secondOperandLiterals).ToList();
+    }
+
+    public override List<RegisterTerm> GetOperands()
+    {
+        var result = new List<RegisterTerm>();
+        
+        result.AddRange(FirstOperand?.GetUsedRegisters() ?? new List<RegisterTerm>());
+        result.AddRange(SecondOperand?.GetUsedRegisters() ?? new List<RegisterTerm>());
+        
+        return result;
+    }
+
+    public override RegisterTerm GetTarget() => LeftHandSide;
+    public override void SwitchRegisters(string used, string newRegister)
+    {
+        if (FirstOperand != null)
+        {
+            FirstOperand.SwitchRegisters(used, newRegister);
+        }
+
+        if (SecondOperand != null)
+        {
+            SecondOperand.SwitchRegisters(used, newRegister);
+        }
     }
 }

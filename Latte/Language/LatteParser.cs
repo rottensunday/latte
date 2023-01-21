@@ -40,28 +40,29 @@ public partial class LatteParser : Parser {
 		T__9=10, T__10=11, T__11=12, T__12=13, T__13=14, T__14=15, T__15=16, T__16=17, 
 		T__17=18, T__18=19, T__19=20, T__20=21, T__21=22, T__22=23, T__23=24, 
 		T__24=25, T__25=26, T__26=27, T__27=28, T__28=29, T__29=30, T__30=31, 
-		T__31=32, T__32=33, COMMENT=34, MULTICOMMENT=35, INT=36, ID=37, WS=38, 
-		STR=39;
+		T__31=32, T__32=33, T__33=34, T__34=35, T__35=36, T__36=37, COMMENT=38, 
+		MULTICOMMENT=39, INT=40, ID=41, WS=42, STR=43;
 	public const int
 		RULE_program = 0, RULE_topDef = 1, RULE_arg = 2, RULE_block = 3, RULE_stmt = 4, 
-		RULE_type_ = 5, RULE_item = 6, RULE_expr = 7, RULE_addOp = 8, RULE_mulOp = 9, 
-		RULE_relOp = 10;
+		RULE_lhs = 5, RULE_classDecl = 6, RULE_type_ = 7, RULE_item = 8, RULE_expr = 9, 
+		RULE_fieldAccess = 10, RULE_addOp = 11, RULE_mulOp = 12, RULE_relOp = 13;
 	public static readonly string[] ruleNames = {
-		"program", "topDef", "arg", "block", "stmt", "type_", "item", "expr", 
-		"addOp", "mulOp", "relOp"
+		"program", "topDef", "arg", "block", "stmt", "lhs", "classDecl", "type_", 
+		"item", "expr", "fieldAccess", "addOp", "mulOp", "relOp"
 	};
 
 	private static readonly string[] _LiteralNames = {
-		null, "'('", "')'", "','", "'{'", "'}'", "';'", "'='", "'++'", "'--'", 
-		"'return'", "'if'", "'else'", "'while'", "'int'", "'string'", "'boolean'", 
-		"'void'", "'-'", "'!'", "'&&'", "'||'", "'true'", "'false'", "'+'", "'*'", 
-		"'/'", "'%'", "'<'", "'<='", "'>'", "'>='", "'=='", "'!='"
+		null, "'('", "')'", "'class'", "'{'", "'}'", "','", "';'", "'='", "'++'", 
+		"'--'", "'return'", "'if'", "'else'", "'while'", "'.'", "'int'", "'string'", 
+		"'boolean'", "'void'", "'-'", "'!'", "'&&'", "'||'", "'true'", "'false'", 
+		"'new'", "') null'", "'+'", "'*'", "'/'", "'%'", "'<'", "'<='", "'>'", 
+		"'>='", "'=='", "'!='"
 	};
 	private static readonly string[] _SymbolicNames = {
 		null, null, null, null, null, null, null, null, null, null, null, null, 
 		null, null, null, null, null, null, null, null, null, null, null, null, 
-		null, null, null, null, null, null, null, null, null, null, "COMMENT", 
-		"MULTICOMMENT", "INT", "ID", "WS", "STR"
+		null, null, null, null, null, null, null, null, null, null, null, null, 
+		null, null, "COMMENT", "MULTICOMMENT", "INT", "ID", "WS", "STR"
 	};
 	public static readonly IVocabulary DefaultVocabulary = new Vocabulary(_LiteralNames, _SymbolicNames);
 
@@ -133,20 +134,20 @@ public partial class LatteParser : Parser {
 		try {
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 23;
+			State = 29;
 			ErrorHandler.Sync(this);
 			_la = TokenStream.LA(1);
 			do {
 				{
 				{
-				State = 22;
+				State = 28;
 				topDef();
 				}
 				}
-				State = 25;
+				State = 31;
 				ErrorHandler.Sync(this);
 				_la = TokenStream.LA(1);
-			} while ( ((_la) & ~0x3f) == 0 && ((1L << _la) & 245760L) != 0 );
+			} while ( ((_la) & ~0x3f) == 0 && ((1L << _la) & 2199024238600L) != 0 );
 			}
 		}
 		catch (RecognitionException re) {
@@ -161,6 +162,44 @@ public partial class LatteParser : Parser {
 	}
 
 	public partial class TopDefContext : ParserRuleContext {
+		public TopDefContext(ParserRuleContext parent, int invokingState)
+			: base(parent, invokingState)
+		{
+		}
+		public override int RuleIndex { get { return RULE_topDef; } }
+	 
+		public TopDefContext() { }
+		public virtual void CopyFrom(TopDefContext context) {
+			base.CopyFrom(context);
+		}
+	}
+	public partial class TopDefClassContext : TopDefContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public ClassDeclContext[] classDecl() {
+			return GetRuleContexts<ClassDeclContext>();
+		}
+		[System.Diagnostics.DebuggerNonUserCode] public ClassDeclContext classDecl(int i) {
+			return GetRuleContext<ClassDeclContext>(i);
+		}
+		public TopDefClassContext(TopDefContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterTopDefClass(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitTopDefClass(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitTopDefClass(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
+	public partial class TopDefFunctionContext : TopDefContext {
 		[System.Diagnostics.DebuggerNonUserCode] public Type_Context type_() {
 			return GetRuleContext<Type_Context>(0);
 		}
@@ -171,25 +210,21 @@ public partial class LatteParser : Parser {
 		[System.Diagnostics.DebuggerNonUserCode] public ArgContext arg() {
 			return GetRuleContext<ArgContext>(0);
 		}
-		public TopDefContext(ParserRuleContext parent, int invokingState)
-			: base(parent, invokingState)
-		{
-		}
-		public override int RuleIndex { get { return RULE_topDef; } }
+		public TopDefFunctionContext(TopDefContext context) { CopyFrom(context); }
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override void EnterRule(IParseTreeListener listener) {
 			ILatteListener typedListener = listener as ILatteListener;
-			if (typedListener != null) typedListener.EnterTopDef(this);
+			if (typedListener != null) typedListener.EnterTopDefFunction(this);
 		}
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override void ExitRule(IParseTreeListener listener) {
 			ILatteListener typedListener = listener as ILatteListener;
-			if (typedListener != null) typedListener.ExitTopDef(this);
+			if (typedListener != null) typedListener.ExitTopDefFunction(this);
 		}
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
 			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
-			if (typedVisitor != null) return typedVisitor.VisitTopDef(this);
+			if (typedVisitor != null) return typedVisitor.VisitTopDefFunction(this);
 			else return visitor.VisitChildren(this);
 		}
 	}
@@ -200,28 +235,69 @@ public partial class LatteParser : Parser {
 		EnterRule(_localctx, 2, RULE_topDef);
 		int _la;
 		try {
-			EnterOuterAlt(_localctx, 1);
-			{
-			State = 27;
-			type_();
-			State = 28;
-			Match(ID);
-			State = 29;
-			Match(T__0);
-			State = 31;
+			State = 52;
 			ErrorHandler.Sync(this);
-			_la = TokenStream.LA(1);
-			if (((_la) & ~0x3f) == 0 && ((1L << _la) & 245760L) != 0) {
+			switch (TokenStream.LA(1)) {
+			case T__15:
+			case T__16:
+			case T__17:
+			case T__18:
+			case ID:
+				_localctx = new TopDefFunctionContext(_localctx);
+				EnterOuterAlt(_localctx, 1);
 				{
-				State = 30;
-				arg();
+				State = 33;
+				type_();
+				State = 34;
+				Match(ID);
+				State = 35;
+				Match(T__0);
+				State = 37;
+				ErrorHandler.Sync(this);
+				_la = TokenStream.LA(1);
+				if (((_la) & ~0x3f) == 0 && ((1L << _la) & 2199024238592L) != 0) {
+					{
+					State = 36;
+					arg();
+					}
 				}
-			}
 
-			State = 33;
-			Match(T__1);
-			State = 34;
-			block();
+				State = 39;
+				Match(T__1);
+				State = 40;
+				block();
+				}
+				break;
+			case T__2:
+				_localctx = new TopDefClassContext(_localctx);
+				EnterOuterAlt(_localctx, 2);
+				{
+				State = 42;
+				Match(T__2);
+				State = 43;
+				Match(ID);
+				State = 44;
+				Match(T__3);
+				State = 48;
+				ErrorHandler.Sync(this);
+				_la = TokenStream.LA(1);
+				while (((_la) & ~0x3f) == 0 && ((1L << _la) & 2199024238592L) != 0) {
+					{
+					{
+					State = 45;
+					classDecl();
+					}
+					}
+					State = 50;
+					ErrorHandler.Sync(this);
+					_la = TokenStream.LA(1);
+				}
+				State = 51;
+				Match(T__4);
+				}
+				break;
+			default:
+				throw new NoViableAltException(this);
 			}
 		}
 		catch (RecognitionException re) {
@@ -277,25 +353,25 @@ public partial class LatteParser : Parser {
 		try {
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 36;
+			State = 54;
 			type_();
-			State = 37;
+			State = 55;
 			Match(ID);
-			State = 44;
+			State = 62;
 			ErrorHandler.Sync(this);
 			_la = TokenStream.LA(1);
-			while (_la==T__2) {
+			while (_la==T__5) {
 				{
 				{
-				State = 38;
-				Match(T__2);
-				State = 39;
+				State = 56;
+				Match(T__5);
+				State = 57;
 				type_();
-				State = 40;
+				State = 58;
 				Match(ID);
 				}
 				}
-				State = 46;
+				State = 64;
 				ErrorHandler.Sync(this);
 				_la = TokenStream.LA(1);
 			}
@@ -350,23 +426,23 @@ public partial class LatteParser : Parser {
 		try {
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 47;
+			State = 65;
 			Match(T__3);
-			State = 51;
+			State = 69;
 			ErrorHandler.Sync(this);
 			_la = TokenStream.LA(1);
-			while (((_la) & ~0x3f) == 0 && ((1L << _la) & 755927870546L) != 0) {
+			while (((_la) & ~0x3f) == 0 && ((1L << _la) & 12094749497490L) != 0) {
 				{
 				{
-				State = 48;
+				State = 66;
 				stmt();
 				}
 				}
-				State = 53;
+				State = 71;
 				ErrorHandler.Sync(this);
 				_la = TokenStream.LA(1);
 			}
-			State = 54;
+			State = 72;
 			Match(T__4);
 			}
 		}
@@ -394,7 +470,9 @@ public partial class LatteParser : Parser {
 		}
 	}
 	public partial class AssContext : StmtContext {
-		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public LhsContext lhs() {
+			return GetRuleContext<LhsContext>(0);
+		}
 		[System.Diagnostics.DebuggerNonUserCode] public ExprContext expr() {
 			return GetRuleContext<ExprContext>(0);
 		}
@@ -417,7 +495,9 @@ public partial class LatteParser : Parser {
 		}
 	}
 	public partial class DecrContext : StmtContext {
-		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public LhsContext lhs() {
+			return GetRuleContext<LhsContext>(0);
+		}
 		public DecrContext(StmtContext context) { CopyFrom(context); }
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override void EnterRule(IParseTreeListener listener) {
@@ -550,7 +630,9 @@ public partial class LatteParser : Parser {
 		}
 	}
 	public partial class IncrContext : StmtContext {
-		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public LhsContext lhs() {
+			return GetRuleContext<LhsContext>(0);
+		}
 		public IncrContext(StmtContext context) { CopyFrom(context); }
 		[System.Diagnostics.DebuggerNonUserCode]
 		public override void EnterRule(IParseTreeListener listener) {
@@ -673,22 +755,22 @@ public partial class LatteParser : Parser {
 		EnterRule(_localctx, 8, RULE_stmt);
 		int _la;
 		try {
-			State = 109;
+			State = 129;
 			ErrorHandler.Sync(this);
-			switch ( Interpreter.AdaptivePredict(TokenStream,5,Context) ) {
+			switch ( Interpreter.AdaptivePredict(TokenStream,7,Context) ) {
 			case 1:
 				_localctx = new EmptyContext(_localctx);
 				EnterOuterAlt(_localctx, 1);
 				{
-				State = 56;
-				Match(T__5);
+				State = 74;
+				Match(T__6);
 				}
 				break;
 			case 2:
 				_localctx = new BlockStmtContext(_localctx);
 				EnterOuterAlt(_localctx, 2);
 				{
-				State = 57;
+				State = 75;
 				block();
 				}
 				break;
@@ -696,103 +778,103 @@ public partial class LatteParser : Parser {
 				_localctx = new DeclContext(_localctx);
 				EnterOuterAlt(_localctx, 3);
 				{
-				State = 58;
+				State = 76;
 				type_();
-				State = 59;
+				State = 77;
 				item();
-				State = 64;
+				State = 82;
 				ErrorHandler.Sync(this);
 				_la = TokenStream.LA(1);
-				while (_la==T__2) {
+				while (_la==T__5) {
 					{
 					{
-					State = 60;
-					Match(T__2);
-					State = 61;
+					State = 78;
+					Match(T__5);
+					State = 79;
 					item();
 					}
 					}
-					State = 66;
+					State = 84;
 					ErrorHandler.Sync(this);
 					_la = TokenStream.LA(1);
 				}
-				State = 67;
-				Match(T__5);
+				State = 85;
+				Match(T__6);
 				}
 				break;
 			case 4:
 				_localctx = new AssContext(_localctx);
 				EnterOuterAlt(_localctx, 4);
 				{
-				State = 69;
-				Match(ID);
-				State = 70;
-				Match(T__6);
-				State = 71;
+				State = 87;
+				lhs();
+				State = 88;
+				Match(T__7);
+				State = 89;
 				expr(0);
-				State = 72;
-				Match(T__5);
+				State = 90;
+				Match(T__6);
 				}
 				break;
 			case 5:
 				_localctx = new IncrContext(_localctx);
 				EnterOuterAlt(_localctx, 5);
 				{
-				State = 74;
-				Match(ID);
-				State = 75;
-				Match(T__7);
-				State = 76;
-				Match(T__5);
+				State = 92;
+				lhs();
+				State = 93;
+				Match(T__8);
+				State = 94;
+				Match(T__6);
 				}
 				break;
 			case 6:
 				_localctx = new DecrContext(_localctx);
 				EnterOuterAlt(_localctx, 6);
 				{
-				State = 77;
-				Match(ID);
-				State = 78;
-				Match(T__8);
-				State = 79;
-				Match(T__5);
+				State = 96;
+				lhs();
+				State = 97;
+				Match(T__9);
+				State = 98;
+				Match(T__6);
 				}
 				break;
 			case 7:
 				_localctx = new RetContext(_localctx);
 				EnterOuterAlt(_localctx, 7);
 				{
-				State = 80;
-				Match(T__9);
-				State = 81;
+				State = 100;
+				Match(T__10);
+				State = 101;
 				expr(0);
-				State = 82;
-				Match(T__5);
+				State = 102;
+				Match(T__6);
 				}
 				break;
 			case 8:
 				_localctx = new VRetContext(_localctx);
 				EnterOuterAlt(_localctx, 8);
 				{
-				State = 84;
-				Match(T__9);
-				State = 85;
-				Match(T__5);
+				State = 104;
+				Match(T__10);
+				State = 105;
+				Match(T__6);
 				}
 				break;
 			case 9:
 				_localctx = new CondContext(_localctx);
 				EnterOuterAlt(_localctx, 9);
 				{
-				State = 86;
-				Match(T__10);
-				State = 87;
+				State = 106;
+				Match(T__11);
+				State = 107;
 				Match(T__0);
-				State = 88;
+				State = 108;
 				expr(0);
-				State = 89;
+				State = 109;
 				Match(T__1);
-				State = 90;
+				State = 110;
 				stmt();
 				}
 				break;
@@ -800,19 +882,19 @@ public partial class LatteParser : Parser {
 				_localctx = new CondElseContext(_localctx);
 				EnterOuterAlt(_localctx, 10);
 				{
-				State = 92;
-				Match(T__10);
-				State = 93;
-				Match(T__0);
-				State = 94;
-				expr(0);
-				State = 95;
-				Match(T__1);
-				State = 96;
-				stmt();
-				State = 97;
+				State = 112;
 				Match(T__11);
-				State = 98;
+				State = 113;
+				Match(T__0);
+				State = 114;
+				expr(0);
+				State = 115;
+				Match(T__1);
+				State = 116;
+				stmt();
+				State = 117;
+				Match(T__12);
+				State = 118;
 				stmt();
 				}
 				break;
@@ -820,15 +902,15 @@ public partial class LatteParser : Parser {
 				_localctx = new WhileContext(_localctx);
 				EnterOuterAlt(_localctx, 11);
 				{
-				State = 100;
-				Match(T__12);
-				State = 101;
+				State = 120;
+				Match(T__13);
+				State = 121;
 				Match(T__0);
-				State = 102;
+				State = 122;
 				expr(0);
-				State = 103;
+				State = 123;
 				Match(T__1);
-				State = 104;
+				State = 124;
 				stmt();
 				}
 				break;
@@ -836,12 +918,185 @@ public partial class LatteParser : Parser {
 				_localctx = new SExpContext(_localctx);
 				EnterOuterAlt(_localctx, 12);
 				{
-				State = 106;
+				State = 126;
 				expr(0);
-				State = 107;
-				Match(T__5);
+				State = 127;
+				Match(T__6);
 				}
 				break;
+			}
+		}
+		catch (RecognitionException re) {
+			_localctx.exception = re;
+			ErrorHandler.ReportError(this, re);
+			ErrorHandler.Recover(this, re);
+		}
+		finally {
+			ExitRule();
+		}
+		return _localctx;
+	}
+
+	public partial class LhsContext : ParserRuleContext {
+		public LhsContext(ParserRuleContext parent, int invokingState)
+			: base(parent, invokingState)
+		{
+		}
+		public override int RuleIndex { get { return RULE_lhs; } }
+	 
+		public LhsContext() { }
+		public virtual void CopyFrom(LhsContext context) {
+			base.CopyFrom(context);
+		}
+	}
+	public partial class FieldAccessLHSContext : LhsContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public FieldAccessContext fieldAccess() {
+			return GetRuleContext<FieldAccessContext>(0);
+		}
+		public FieldAccessLHSContext(LhsContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterFieldAccessLHS(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitFieldAccessLHS(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFieldAccessLHS(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
+	public partial class IdLhsContext : LhsContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		public IdLhsContext(LhsContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterIdLhs(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitIdLhs(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitIdLhs(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
+
+	[RuleVersion(0)]
+	public LhsContext lhs() {
+		LhsContext _localctx = new LhsContext(Context, State);
+		EnterRule(_localctx, 10, RULE_lhs);
+		try {
+			State = 135;
+			ErrorHandler.Sync(this);
+			switch ( Interpreter.AdaptivePredict(TokenStream,8,Context) ) {
+			case 1:
+				_localctx = new IdLhsContext(_localctx);
+				EnterOuterAlt(_localctx, 1);
+				{
+				State = 131;
+				Match(ID);
+				}
+				break;
+			case 2:
+				_localctx = new FieldAccessLHSContext(_localctx);
+				EnterOuterAlt(_localctx, 2);
+				{
+				State = 132;
+				Match(ID);
+				State = 133;
+				Match(T__14);
+				State = 134;
+				fieldAccess();
+				}
+				break;
+			}
+		}
+		catch (RecognitionException re) {
+			_localctx.exception = re;
+			ErrorHandler.ReportError(this, re);
+			ErrorHandler.Recover(this, re);
+		}
+		finally {
+			ExitRule();
+		}
+		return _localctx;
+	}
+
+	public partial class ClassDeclContext : ParserRuleContext {
+		[System.Diagnostics.DebuggerNonUserCode] public Type_Context type_() {
+			return GetRuleContext<Type_Context>(0);
+		}
+		[System.Diagnostics.DebuggerNonUserCode] public ItemContext[] item() {
+			return GetRuleContexts<ItemContext>();
+		}
+		[System.Diagnostics.DebuggerNonUserCode] public ItemContext item(int i) {
+			return GetRuleContext<ItemContext>(i);
+		}
+		public ClassDeclContext(ParserRuleContext parent, int invokingState)
+			: base(parent, invokingState)
+		{
+		}
+		public override int RuleIndex { get { return RULE_classDecl; } }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterClassDecl(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitClassDecl(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitClassDecl(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
+
+	[RuleVersion(0)]
+	public ClassDeclContext classDecl() {
+		ClassDeclContext _localctx = new ClassDeclContext(Context, State);
+		EnterRule(_localctx, 12, RULE_classDecl);
+		int _la;
+		try {
+			EnterOuterAlt(_localctx, 1);
+			{
+			State = 137;
+			type_();
+			State = 138;
+			item();
+			State = 143;
+			ErrorHandler.Sync(this);
+			_la = TokenStream.LA(1);
+			while (_la==T__5) {
+				{
+				{
+				State = 139;
+				Match(T__5);
+				State = 140;
+				item();
+				}
+				}
+				State = 145;
+				ErrorHandler.Sync(this);
+				_la = TokenStream.LA(1);
+			}
+			State = 146;
+			Match(T__6);
 			}
 		}
 		catch (RecognitionException re) {
@@ -924,6 +1179,26 @@ public partial class LatteParser : Parser {
 			else return visitor.VisitChildren(this);
 		}
 	}
+	public partial class ClassInstanceContext : Type_Context {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		public ClassInstanceContext(Type_Context context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterClassInstance(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitClassInstance(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitClassInstance(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
 	public partial class IntContext : Type_Context {
 		public IntContext(Type_Context context) { CopyFrom(context); }
 		[System.Diagnostics.DebuggerNonUserCode]
@@ -947,41 +1222,49 @@ public partial class LatteParser : Parser {
 	[RuleVersion(0)]
 	public Type_Context type_() {
 		Type_Context _localctx = new Type_Context(Context, State);
-		EnterRule(_localctx, 10, RULE_type_);
+		EnterRule(_localctx, 14, RULE_type_);
 		try {
-			State = 115;
+			State = 153;
 			ErrorHandler.Sync(this);
 			switch (TokenStream.LA(1)) {
-			case T__13:
+			case T__15:
 				_localctx = new IntContext(_localctx);
 				EnterOuterAlt(_localctx, 1);
 				{
-				State = 111;
-				Match(T__13);
-				}
-				break;
-			case T__14:
-				_localctx = new StrContext(_localctx);
-				EnterOuterAlt(_localctx, 2);
-				{
-				State = 112;
-				Match(T__14);
-				}
-				break;
-			case T__15:
-				_localctx = new BoolContext(_localctx);
-				EnterOuterAlt(_localctx, 3);
-				{
-				State = 113;
+				State = 148;
 				Match(T__15);
 				}
 				break;
 			case T__16:
+				_localctx = new StrContext(_localctx);
+				EnterOuterAlt(_localctx, 2);
+				{
+				State = 149;
+				Match(T__16);
+				}
+				break;
+			case T__17:
+				_localctx = new BoolContext(_localctx);
+				EnterOuterAlt(_localctx, 3);
+				{
+				State = 150;
+				Match(T__17);
+				}
+				break;
+			case T__18:
 				_localctx = new VoidContext(_localctx);
 				EnterOuterAlt(_localctx, 4);
 				{
-				State = 114;
-				Match(T__16);
+				State = 151;
+				Match(T__18);
+				}
+				break;
+			case ID:
+				_localctx = new ClassInstanceContext(_localctx);
+				EnterOuterAlt(_localctx, 5);
+				{
+				State = 152;
+				Match(ID);
 				}
 				break;
 			default:
@@ -1058,16 +1341,16 @@ public partial class LatteParser : Parser {
 	[RuleVersion(0)]
 	public ItemContext item() {
 		ItemContext _localctx = new ItemContext(Context, State);
-		EnterRule(_localctx, 12, RULE_item);
+		EnterRule(_localctx, 16, RULE_item);
 		try {
-			State = 121;
+			State = 159;
 			ErrorHandler.Sync(this);
-			switch ( Interpreter.AdaptivePredict(TokenStream,7,Context) ) {
+			switch ( Interpreter.AdaptivePredict(TokenStream,11,Context) ) {
 			case 1:
 				_localctx = new SimpleDeclContext(_localctx);
 				EnterOuterAlt(_localctx, 1);
 				{
-				State = 117;
+				State = 155;
 				Match(ID);
 				}
 				break;
@@ -1075,11 +1358,11 @@ public partial class LatteParser : Parser {
 				_localctx = new AssDeclContext(_localctx);
 				EnterOuterAlt(_localctx, 2);
 				{
-				State = 118;
+				State = 156;
 				Match(ID);
-				State = 119;
-				Match(T__6);
-				State = 120;
+				State = 157;
+				Match(T__7);
+				State = 158;
 				expr(0);
 				}
 				break;
@@ -1288,6 +1571,29 @@ public partial class LatteParser : Parser {
 			else return visitor.VisitChildren(this);
 		}
 	}
+	public partial class EFieldAccessRHSContext : ExprContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public FieldAccessContext fieldAccess() {
+			return GetRuleContext<FieldAccessContext>(0);
+		}
+		public EFieldAccessRHSContext(ExprContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterEFieldAccessRHS(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitEFieldAccessRHS(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitEFieldAccessRHS(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
 	public partial class EMulOpContext : ExprContext {
 		[System.Diagnostics.DebuggerNonUserCode] public ExprContext[] expr() {
 			return GetRuleContexts<ExprContext>();
@@ -1382,6 +1688,26 @@ public partial class LatteParser : Parser {
 			else return visitor.VisitChildren(this);
 		}
 	}
+	public partial class ENewContext : ExprContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		public ENewContext(ExprContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterENew(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitENew(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitENew(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
 	public partial class EAddOpContext : ExprContext {
 		[System.Diagnostics.DebuggerNonUserCode] public ExprContext[] expr() {
 			return GetRuleContexts<ExprContext>();
@@ -1410,6 +1736,26 @@ public partial class LatteParser : Parser {
 			else return visitor.VisitChildren(this);
 		}
 	}
+	public partial class ENullContext : ExprContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		public ENullContext(ExprContext context) { CopyFrom(context); }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterENull(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitENull(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitENull(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
 
 	[RuleVersion(0)]
 	public ExprContext expr() {
@@ -1421,33 +1767,33 @@ public partial class LatteParser : Parser {
 		int _parentState = State;
 		ExprContext _localctx = new ExprContext(Context, _parentState);
 		ExprContext _prevctx = _localctx;
-		int _startState = 14;
-		EnterRecursionRule(_localctx, 14, RULE_expr, _p);
+		int _startState = 18;
+		EnterRecursionRule(_localctx, 18, RULE_expr, _p);
 		int _la;
 		try {
 			int _alt;
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 148;
+			State = 194;
 			ErrorHandler.Sync(this);
-			switch ( Interpreter.AdaptivePredict(TokenStream,10,Context) ) {
+			switch ( Interpreter.AdaptivePredict(TokenStream,14,Context) ) {
 			case 1:
 				{
 				_localctx = new EUnOpContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
 
-				State = 124;
+				State = 162;
 				_la = TokenStream.LA(1);
-				if ( !(_la==T__17 || _la==T__18) ) {
+				if ( !(_la==T__19 || _la==T__20) ) {
 				ErrorHandler.RecoverInline(this);
 				}
 				else {
 					ErrorHandler.ReportMatch(this);
 				    Consume();
 				}
-				State = 125;
-				expr(13);
+				State = 163;
+				expr(16);
 				}
 				break;
 			case 2:
@@ -1455,7 +1801,7 @@ public partial class LatteParser : Parser {
 				_localctx = new EIdContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 126;
+				State = 164;
 				Match(ID);
 				}
 				break;
@@ -1464,7 +1810,7 @@ public partial class LatteParser : Parser {
 				_localctx = new EIntContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 127;
+				State = 165;
 				Match(INT);
 				}
 				break;
@@ -1473,8 +1819,8 @@ public partial class LatteParser : Parser {
 				_localctx = new ETrueContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 128;
-				Match(T__21);
+				State = 166;
+				Match(T__23);
 				}
 				break;
 			case 5:
@@ -1482,8 +1828,8 @@ public partial class LatteParser : Parser {
 				_localctx = new EFalseContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 129;
-				Match(T__22);
+				State = 167;
+				Match(T__24);
 				}
 				break;
 			case 6:
@@ -1491,37 +1837,37 @@ public partial class LatteParser : Parser {
 				_localctx = new EFunCallContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 130;
+				State = 168;
 				Match(ID);
-				State = 131;
+				State = 169;
 				Match(T__0);
-				State = 140;
+				State = 178;
 				ErrorHandler.Sync(this);
 				_la = TokenStream.LA(1);
-				if (((_la) & ~0x3f) == 0 && ((1L << _la) & 755927613442L) != 0) {
+				if (((_la) & ~0x3f) == 0 && ((1L << _la) & 12094748491778L) != 0) {
 					{
-					State = 132;
+					State = 170;
 					expr(0);
-					State = 137;
+					State = 175;
 					ErrorHandler.Sync(this);
 					_la = TokenStream.LA(1);
-					while (_la==T__2) {
+					while (_la==T__5) {
 						{
 						{
-						State = 133;
-						Match(T__2);
-						State = 134;
+						State = 171;
+						Match(T__5);
+						State = 172;
 						expr(0);
 						}
 						}
-						State = 139;
+						State = 177;
 						ErrorHandler.Sync(this);
 						_la = TokenStream.LA(1);
 					}
 					}
 				}
 
-				State = 142;
+				State = 180;
 				Match(T__1);
 				}
 				break;
@@ -1530,7 +1876,7 @@ public partial class LatteParser : Parser {
 				_localctx = new EStrContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 143;
+				State = 181;
 				Match(STR);
 				}
 				break;
@@ -1539,94 +1885,131 @@ public partial class LatteParser : Parser {
 				_localctx = new EParenContext(_localctx);
 				Context = _localctx;
 				_prevctx = _localctx;
-				State = 144;
+				State = 182;
 				Match(T__0);
-				State = 145;
+				State = 183;
 				expr(0);
-				State = 146;
+				State = 184;
 				Match(T__1);
+				}
+				break;
+			case 9:
+				{
+				_localctx = new ENewContext(_localctx);
+				Context = _localctx;
+				_prevctx = _localctx;
+				State = 186;
+				Match(T__25);
+				State = 187;
+				Match(ID);
+				}
+				break;
+			case 10:
+				{
+				_localctx = new ENullContext(_localctx);
+				Context = _localctx;
+				_prevctx = _localctx;
+				State = 188;
+				Match(T__0);
+				State = 189;
+				Match(ID);
+				State = 190;
+				Match(T__26);
+				}
+				break;
+			case 11:
+				{
+				_localctx = new EFieldAccessRHSContext(_localctx);
+				Context = _localctx;
+				_prevctx = _localctx;
+				State = 191;
+				Match(ID);
+				State = 192;
+				Match(T__14);
+				State = 193;
+				fieldAccess();
 				}
 				break;
 			}
 			Context.Stop = TokenStream.LT(-1);
-			State = 170;
+			State = 216;
 			ErrorHandler.Sync(this);
-			_alt = Interpreter.AdaptivePredict(TokenStream,12,Context);
+			_alt = Interpreter.AdaptivePredict(TokenStream,16,Context);
 			while ( _alt!=2 && _alt!=global::Antlr4.Runtime.Atn.ATN.INVALID_ALT_NUMBER ) {
 				if ( _alt==1 ) {
 					if ( ParseListeners!=null )
 						TriggerExitRuleEvent();
 					_prevctx = _localctx;
 					{
-					State = 168;
+					State = 214;
 					ErrorHandler.Sync(this);
-					switch ( Interpreter.AdaptivePredict(TokenStream,11,Context) ) {
+					switch ( Interpreter.AdaptivePredict(TokenStream,15,Context) ) {
 					case 1:
 						{
 						_localctx = new EMulOpContext(new ExprContext(_parentctx, _parentState));
 						PushNewRecursionContext(_localctx, _startState, RULE_expr);
-						State = 150;
-						if (!(Precpred(Context, 12))) throw new FailedPredicateException(this, "Precpred(Context, 12)");
-						State = 151;
+						State = 196;
+						if (!(Precpred(Context, 15))) throw new FailedPredicateException(this, "Precpred(Context, 15)");
+						State = 197;
 						mulOp();
-						State = 152;
-						expr(13);
+						State = 198;
+						expr(16);
 						}
 						break;
 					case 2:
 						{
 						_localctx = new EAddOpContext(new ExprContext(_parentctx, _parentState));
 						PushNewRecursionContext(_localctx, _startState, RULE_expr);
-						State = 154;
-						if (!(Precpred(Context, 11))) throw new FailedPredicateException(this, "Precpred(Context, 11)");
-						State = 155;
+						State = 200;
+						if (!(Precpred(Context, 14))) throw new FailedPredicateException(this, "Precpred(Context, 14)");
+						State = 201;
 						addOp();
-						State = 156;
-						expr(12);
+						State = 202;
+						expr(15);
 						}
 						break;
 					case 3:
 						{
 						_localctx = new ERelOpContext(new ExprContext(_parentctx, _parentState));
 						PushNewRecursionContext(_localctx, _startState, RULE_expr);
-						State = 158;
-						if (!(Precpred(Context, 10))) throw new FailedPredicateException(this, "Precpred(Context, 10)");
-						State = 159;
+						State = 204;
+						if (!(Precpred(Context, 13))) throw new FailedPredicateException(this, "Precpred(Context, 13)");
+						State = 205;
 						relOp();
-						State = 160;
-						expr(11);
+						State = 206;
+						expr(14);
 						}
 						break;
 					case 4:
 						{
 						_localctx = new EAndContext(new ExprContext(_parentctx, _parentState));
 						PushNewRecursionContext(_localctx, _startState, RULE_expr);
-						State = 162;
-						if (!(Precpred(Context, 9))) throw new FailedPredicateException(this, "Precpred(Context, 9)");
-						State = 163;
-						Match(T__19);
-						State = 164;
-						expr(9);
+						State = 208;
+						if (!(Precpred(Context, 12))) throw new FailedPredicateException(this, "Precpred(Context, 12)");
+						State = 209;
+						Match(T__21);
+						State = 210;
+						expr(12);
 						}
 						break;
 					case 5:
 						{
 						_localctx = new EOrContext(new ExprContext(_parentctx, _parentState));
 						PushNewRecursionContext(_localctx, _startState, RULE_expr);
-						State = 165;
-						if (!(Precpred(Context, 8))) throw new FailedPredicateException(this, "Precpred(Context, 8)");
-						State = 166;
-						Match(T__20);
-						State = 167;
-						expr(8);
+						State = 211;
+						if (!(Precpred(Context, 11))) throw new FailedPredicateException(this, "Precpred(Context, 11)");
+						State = 212;
+						Match(T__22);
+						State = 213;
+						expr(11);
 						}
 						break;
 					}
 					} 
 				}
-				State = 172;
+				State = 218;
 				ErrorHandler.Sync(this);
-				_alt = Interpreter.AdaptivePredict(TokenStream,12,Context);
+				_alt = Interpreter.AdaptivePredict(TokenStream,16,Context);
 			}
 			}
 		}
@@ -1637,6 +2020,68 @@ public partial class LatteParser : Parser {
 		}
 		finally {
 			UnrollRecursionContexts(_parentctx);
+		}
+		return _localctx;
+	}
+
+	public partial class FieldAccessContext : ParserRuleContext {
+		[System.Diagnostics.DebuggerNonUserCode] public ITerminalNode ID() { return GetToken(LatteParser.ID, 0); }
+		[System.Diagnostics.DebuggerNonUserCode] public FieldAccessContext fieldAccess() {
+			return GetRuleContext<FieldAccessContext>(0);
+		}
+		public FieldAccessContext(ParserRuleContext parent, int invokingState)
+			: base(parent, invokingState)
+		{
+		}
+		public override int RuleIndex { get { return RULE_fieldAccess; } }
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void EnterRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.EnterFieldAccess(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override void ExitRule(IParseTreeListener listener) {
+			ILatteListener typedListener = listener as ILatteListener;
+			if (typedListener != null) typedListener.ExitFieldAccess(this);
+		}
+		[System.Diagnostics.DebuggerNonUserCode]
+		public override TResult Accept<TResult>(IParseTreeVisitor<TResult> visitor) {
+			ILatteVisitor<TResult> typedVisitor = visitor as ILatteVisitor<TResult>;
+			if (typedVisitor != null) return typedVisitor.VisitFieldAccess(this);
+			else return visitor.VisitChildren(this);
+		}
+	}
+
+	[RuleVersion(0)]
+	public FieldAccessContext fieldAccess() {
+		FieldAccessContext _localctx = new FieldAccessContext(Context, State);
+		EnterRule(_localctx, 20, RULE_fieldAccess);
+		try {
+			EnterOuterAlt(_localctx, 1);
+			{
+			State = 219;
+			Match(ID);
+			State = 222;
+			ErrorHandler.Sync(this);
+			switch ( Interpreter.AdaptivePredict(TokenStream,17,Context) ) {
+			case 1:
+				{
+				State = 220;
+				Match(T__14);
+				State = 221;
+				fieldAccess();
+				}
+				break;
+			}
+			}
+		}
+		catch (RecognitionException re) {
+			_localctx.exception = re;
+			ErrorHandler.ReportError(this, re);
+			ErrorHandler.Recover(this, re);
+		}
+		finally {
+			ExitRule();
 		}
 		return _localctx;
 	}
@@ -1668,14 +2113,14 @@ public partial class LatteParser : Parser {
 	[RuleVersion(0)]
 	public AddOpContext addOp() {
 		AddOpContext _localctx = new AddOpContext(Context, State);
-		EnterRule(_localctx, 16, RULE_addOp);
+		EnterRule(_localctx, 22, RULE_addOp);
 		int _la;
 		try {
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 173;
+			State = 224;
 			_la = TokenStream.LA(1);
-			if ( !(_la==T__17 || _la==T__23) ) {
+			if ( !(_la==T__19 || _la==T__27) ) {
 			ErrorHandler.RecoverInline(this);
 			}
 			else {
@@ -1722,14 +2167,14 @@ public partial class LatteParser : Parser {
 	[RuleVersion(0)]
 	public MulOpContext mulOp() {
 		MulOpContext _localctx = new MulOpContext(Context, State);
-		EnterRule(_localctx, 18, RULE_mulOp);
+		EnterRule(_localctx, 24, RULE_mulOp);
 		int _la;
 		try {
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 175;
+			State = 226;
 			_la = TokenStream.LA(1);
-			if ( !(((_la) & ~0x3f) == 0 && ((1L << _la) & 234881024L) != 0) ) {
+			if ( !(((_la) & ~0x3f) == 0 && ((1L << _la) & 3758096384L) != 0) ) {
 			ErrorHandler.RecoverInline(this);
 			}
 			else {
@@ -1776,14 +2221,14 @@ public partial class LatteParser : Parser {
 	[RuleVersion(0)]
 	public RelOpContext relOp() {
 		RelOpContext _localctx = new RelOpContext(Context, State);
-		EnterRule(_localctx, 20, RULE_relOp);
+		EnterRule(_localctx, 26, RULE_relOp);
 		int _la;
 		try {
 			EnterOuterAlt(_localctx, 1);
 			{
-			State = 177;
+			State = 228;
 			_la = TokenStream.LA(1);
-			if ( !(((_la) & ~0x3f) == 0 && ((1L << _la) & 16911433728L) != 0) ) {
+			if ( !(((_la) & ~0x3f) == 0 && ((1L << _la) & 270582939648L) != 0) ) {
 			ErrorHandler.RecoverInline(this);
 			}
 			else {
@@ -1805,80 +2250,97 @@ public partial class LatteParser : Parser {
 
 	public override bool Sempred(RuleContext _localctx, int ruleIndex, int predIndex) {
 		switch (ruleIndex) {
-		case 7: return expr_sempred((ExprContext)_localctx, predIndex);
+		case 9: return expr_sempred((ExprContext)_localctx, predIndex);
 		}
 		return true;
 	}
 	private bool expr_sempred(ExprContext _localctx, int predIndex) {
 		switch (predIndex) {
-		case 0: return Precpred(Context, 12);
-		case 1: return Precpred(Context, 11);
-		case 2: return Precpred(Context, 10);
-		case 3: return Precpred(Context, 9);
-		case 4: return Precpred(Context, 8);
+		case 0: return Precpred(Context, 15);
+		case 1: return Precpred(Context, 14);
+		case 2: return Precpred(Context, 13);
+		case 3: return Precpred(Context, 12);
+		case 4: return Precpred(Context, 11);
 		}
 		return true;
 	}
 
 	private static int[] _serializedATN = {
-		4,1,39,180,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,7,
-		7,7,2,8,7,8,2,9,7,9,2,10,7,10,1,0,4,0,24,8,0,11,0,12,0,25,1,1,1,1,1,1,
-		1,1,3,1,32,8,1,1,1,1,1,1,1,1,2,1,2,1,2,1,2,1,2,1,2,5,2,43,8,2,10,2,12,
-		2,46,9,2,1,3,1,3,5,3,50,8,3,10,3,12,3,53,9,3,1,3,1,3,1,4,1,4,1,4,1,4,1,
-		4,1,4,5,4,63,8,4,10,4,12,4,66,9,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,
+		4,1,43,231,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,7,
+		7,7,2,8,7,8,2,9,7,9,2,10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,1,0,4,0,30,
+		8,0,11,0,12,0,31,1,1,1,1,1,1,1,1,3,1,38,8,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+		1,5,1,47,8,1,10,1,12,1,50,9,1,1,1,3,1,53,8,1,1,2,1,2,1,2,1,2,1,2,1,2,5,
+		2,61,8,2,10,2,12,2,64,9,2,1,3,1,3,5,3,68,8,3,10,3,12,3,71,9,3,1,3,1,3,
+		1,4,1,4,1,4,1,4,1,4,1,4,5,4,81,8,4,10,4,12,4,84,9,4,1,4,1,4,1,4,1,4,1,
+		4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,
 		1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,
-		4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,1,4,3,4,110,
-		8,4,1,5,1,5,1,5,1,5,3,5,116,8,5,1,6,1,6,1,6,1,6,3,6,122,8,6,1,7,1,7,1,
-		7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,5,7,136,8,7,10,7,12,7,139,9,7,3,
-		7,141,8,7,1,7,1,7,1,7,1,7,1,7,1,7,3,7,149,8,7,1,7,1,7,1,7,1,7,1,7,1,7,
-		1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,1,7,5,7,169,8,7,10,7,12,7,
-		172,9,7,1,8,1,8,1,9,1,9,1,10,1,10,1,10,0,1,14,11,0,2,4,6,8,10,12,14,16,
-		18,20,0,4,1,0,18,19,2,0,18,18,24,24,1,0,25,27,1,0,28,33,202,0,23,1,0,0,
-		0,2,27,1,0,0,0,4,36,1,0,0,0,6,47,1,0,0,0,8,109,1,0,0,0,10,115,1,0,0,0,
-		12,121,1,0,0,0,14,148,1,0,0,0,16,173,1,0,0,0,18,175,1,0,0,0,20,177,1,0,
-		0,0,22,24,3,2,1,0,23,22,1,0,0,0,24,25,1,0,0,0,25,23,1,0,0,0,25,26,1,0,
-		0,0,26,1,1,0,0,0,27,28,3,10,5,0,28,29,5,37,0,0,29,31,5,1,0,0,30,32,3,4,
-		2,0,31,30,1,0,0,0,31,32,1,0,0,0,32,33,1,0,0,0,33,34,5,2,0,0,34,35,3,6,
-		3,0,35,3,1,0,0,0,36,37,3,10,5,0,37,44,5,37,0,0,38,39,5,3,0,0,39,40,3,10,
-		5,0,40,41,5,37,0,0,41,43,1,0,0,0,42,38,1,0,0,0,43,46,1,0,0,0,44,42,1,0,
-		0,0,44,45,1,0,0,0,45,5,1,0,0,0,46,44,1,0,0,0,47,51,5,4,0,0,48,50,3,8,4,
-		0,49,48,1,0,0,0,50,53,1,0,0,0,51,49,1,0,0,0,51,52,1,0,0,0,52,54,1,0,0,
-		0,53,51,1,0,0,0,54,55,5,5,0,0,55,7,1,0,0,0,56,110,5,6,0,0,57,110,3,6,3,
-		0,58,59,3,10,5,0,59,64,3,12,6,0,60,61,5,3,0,0,61,63,3,12,6,0,62,60,1,0,
-		0,0,63,66,1,0,0,0,64,62,1,0,0,0,64,65,1,0,0,0,65,67,1,0,0,0,66,64,1,0,
-		0,0,67,68,5,6,0,0,68,110,1,0,0,0,69,70,5,37,0,0,70,71,5,7,0,0,71,72,3,
-		14,7,0,72,73,5,6,0,0,73,110,1,0,0,0,74,75,5,37,0,0,75,76,5,8,0,0,76,110,
-		5,6,0,0,77,78,5,37,0,0,78,79,5,9,0,0,79,110,5,6,0,0,80,81,5,10,0,0,81,
-		82,3,14,7,0,82,83,5,6,0,0,83,110,1,0,0,0,84,85,5,10,0,0,85,110,5,6,0,0,
-		86,87,5,11,0,0,87,88,5,1,0,0,88,89,3,14,7,0,89,90,5,2,0,0,90,91,3,8,4,
-		0,91,110,1,0,0,0,92,93,5,11,0,0,93,94,5,1,0,0,94,95,3,14,7,0,95,96,5,2,
-		0,0,96,97,3,8,4,0,97,98,5,12,0,0,98,99,3,8,4,0,99,110,1,0,0,0,100,101,
-		5,13,0,0,101,102,5,1,0,0,102,103,3,14,7,0,103,104,5,2,0,0,104,105,3,8,
-		4,0,105,110,1,0,0,0,106,107,3,14,7,0,107,108,5,6,0,0,108,110,1,0,0,0,109,
-		56,1,0,0,0,109,57,1,0,0,0,109,58,1,0,0,0,109,69,1,0,0,0,109,74,1,0,0,0,
-		109,77,1,0,0,0,109,80,1,0,0,0,109,84,1,0,0,0,109,86,1,0,0,0,109,92,1,0,
-		0,0,109,100,1,0,0,0,109,106,1,0,0,0,110,9,1,0,0,0,111,116,5,14,0,0,112,
-		116,5,15,0,0,113,116,5,16,0,0,114,116,5,17,0,0,115,111,1,0,0,0,115,112,
-		1,0,0,0,115,113,1,0,0,0,115,114,1,0,0,0,116,11,1,0,0,0,117,122,5,37,0,
-		0,118,119,5,37,0,0,119,120,5,7,0,0,120,122,3,14,7,0,121,117,1,0,0,0,121,
-		118,1,0,0,0,122,13,1,0,0,0,123,124,6,7,-1,0,124,125,7,0,0,0,125,149,3,
-		14,7,13,126,149,5,37,0,0,127,149,5,36,0,0,128,149,5,22,0,0,129,149,5,23,
-		0,0,130,131,5,37,0,0,131,140,5,1,0,0,132,137,3,14,7,0,133,134,5,3,0,0,
-		134,136,3,14,7,0,135,133,1,0,0,0,136,139,1,0,0,0,137,135,1,0,0,0,137,138,
-		1,0,0,0,138,141,1,0,0,0,139,137,1,0,0,0,140,132,1,0,0,0,140,141,1,0,0,
-		0,141,142,1,0,0,0,142,149,5,2,0,0,143,149,5,39,0,0,144,145,5,1,0,0,145,
-		146,3,14,7,0,146,147,5,2,0,0,147,149,1,0,0,0,148,123,1,0,0,0,148,126,1,
-		0,0,0,148,127,1,0,0,0,148,128,1,0,0,0,148,129,1,0,0,0,148,130,1,0,0,0,
-		148,143,1,0,0,0,148,144,1,0,0,0,149,170,1,0,0,0,150,151,10,12,0,0,151,
-		152,3,18,9,0,152,153,3,14,7,13,153,169,1,0,0,0,154,155,10,11,0,0,155,156,
-		3,16,8,0,156,157,3,14,7,12,157,169,1,0,0,0,158,159,10,10,0,0,159,160,3,
-		20,10,0,160,161,3,14,7,11,161,169,1,0,0,0,162,163,10,9,0,0,163,164,5,20,
-		0,0,164,169,3,14,7,9,165,166,10,8,0,0,166,167,5,21,0,0,167,169,3,14,7,
-		8,168,150,1,0,0,0,168,154,1,0,0,0,168,158,1,0,0,0,168,162,1,0,0,0,168,
-		165,1,0,0,0,169,172,1,0,0,0,170,168,1,0,0,0,170,171,1,0,0,0,171,15,1,0,
-		0,0,172,170,1,0,0,0,173,174,7,1,0,0,174,17,1,0,0,0,175,176,7,2,0,0,176,
-		19,1,0,0,0,177,178,7,3,0,0,178,21,1,0,0,0,13,25,31,44,51,64,109,115,121,
-		137,140,148,168,170
+		4,1,4,1,4,1,4,1,4,3,4,130,8,4,1,5,1,5,1,5,1,5,3,5,136,8,5,1,6,1,6,1,6,
+		1,6,5,6,142,8,6,10,6,12,6,145,9,6,1,6,1,6,1,7,1,7,1,7,1,7,1,7,3,7,154,
+		8,7,1,8,1,8,1,8,1,8,3,8,160,8,8,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,
+		9,1,9,1,9,5,9,174,8,9,10,9,12,9,177,9,9,3,9,179,8,9,1,9,1,9,1,9,1,9,1,
+		9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,3,9,195,8,9,1,9,1,9,1,9,1,9,1,9,
+		1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,1,9,5,9,215,8,9,10,9,12,
+		9,218,9,9,1,10,1,10,1,10,3,10,223,8,10,1,11,1,11,1,12,1,12,1,13,1,13,1,
+		13,0,1,18,14,0,2,4,6,8,10,12,14,16,18,20,22,24,26,0,4,1,0,20,21,2,0,20,
+		20,28,28,1,0,29,31,1,0,32,37,259,0,29,1,0,0,0,2,52,1,0,0,0,4,54,1,0,0,
+		0,6,65,1,0,0,0,8,129,1,0,0,0,10,135,1,0,0,0,12,137,1,0,0,0,14,153,1,0,
+		0,0,16,159,1,0,0,0,18,194,1,0,0,0,20,219,1,0,0,0,22,224,1,0,0,0,24,226,
+		1,0,0,0,26,228,1,0,0,0,28,30,3,2,1,0,29,28,1,0,0,0,30,31,1,0,0,0,31,29,
+		1,0,0,0,31,32,1,0,0,0,32,1,1,0,0,0,33,34,3,14,7,0,34,35,5,41,0,0,35,37,
+		5,1,0,0,36,38,3,4,2,0,37,36,1,0,0,0,37,38,1,0,0,0,38,39,1,0,0,0,39,40,
+		5,2,0,0,40,41,3,6,3,0,41,53,1,0,0,0,42,43,5,3,0,0,43,44,5,41,0,0,44,48,
+		5,4,0,0,45,47,3,12,6,0,46,45,1,0,0,0,47,50,1,0,0,0,48,46,1,0,0,0,48,49,
+		1,0,0,0,49,51,1,0,0,0,50,48,1,0,0,0,51,53,5,5,0,0,52,33,1,0,0,0,52,42,
+		1,0,0,0,53,3,1,0,0,0,54,55,3,14,7,0,55,62,5,41,0,0,56,57,5,6,0,0,57,58,
+		3,14,7,0,58,59,5,41,0,0,59,61,1,0,0,0,60,56,1,0,0,0,61,64,1,0,0,0,62,60,
+		1,0,0,0,62,63,1,0,0,0,63,5,1,0,0,0,64,62,1,0,0,0,65,69,5,4,0,0,66,68,3,
+		8,4,0,67,66,1,0,0,0,68,71,1,0,0,0,69,67,1,0,0,0,69,70,1,0,0,0,70,72,1,
+		0,0,0,71,69,1,0,0,0,72,73,5,5,0,0,73,7,1,0,0,0,74,130,5,7,0,0,75,130,3,
+		6,3,0,76,77,3,14,7,0,77,82,3,16,8,0,78,79,5,6,0,0,79,81,3,16,8,0,80,78,
+		1,0,0,0,81,84,1,0,0,0,82,80,1,0,0,0,82,83,1,0,0,0,83,85,1,0,0,0,84,82,
+		1,0,0,0,85,86,5,7,0,0,86,130,1,0,0,0,87,88,3,10,5,0,88,89,5,8,0,0,89,90,
+		3,18,9,0,90,91,5,7,0,0,91,130,1,0,0,0,92,93,3,10,5,0,93,94,5,9,0,0,94,
+		95,5,7,0,0,95,130,1,0,0,0,96,97,3,10,5,0,97,98,5,10,0,0,98,99,5,7,0,0,
+		99,130,1,0,0,0,100,101,5,11,0,0,101,102,3,18,9,0,102,103,5,7,0,0,103,130,
+		1,0,0,0,104,105,5,11,0,0,105,130,5,7,0,0,106,107,5,12,0,0,107,108,5,1,
+		0,0,108,109,3,18,9,0,109,110,5,2,0,0,110,111,3,8,4,0,111,130,1,0,0,0,112,
+		113,5,12,0,0,113,114,5,1,0,0,114,115,3,18,9,0,115,116,5,2,0,0,116,117,
+		3,8,4,0,117,118,5,13,0,0,118,119,3,8,4,0,119,130,1,0,0,0,120,121,5,14,
+		0,0,121,122,5,1,0,0,122,123,3,18,9,0,123,124,5,2,0,0,124,125,3,8,4,0,125,
+		130,1,0,0,0,126,127,3,18,9,0,127,128,5,7,0,0,128,130,1,0,0,0,129,74,1,
+		0,0,0,129,75,1,0,0,0,129,76,1,0,0,0,129,87,1,0,0,0,129,92,1,0,0,0,129,
+		96,1,0,0,0,129,100,1,0,0,0,129,104,1,0,0,0,129,106,1,0,0,0,129,112,1,0,
+		0,0,129,120,1,0,0,0,129,126,1,0,0,0,130,9,1,0,0,0,131,136,5,41,0,0,132,
+		133,5,41,0,0,133,134,5,15,0,0,134,136,3,20,10,0,135,131,1,0,0,0,135,132,
+		1,0,0,0,136,11,1,0,0,0,137,138,3,14,7,0,138,143,3,16,8,0,139,140,5,6,0,
+		0,140,142,3,16,8,0,141,139,1,0,0,0,142,145,1,0,0,0,143,141,1,0,0,0,143,
+		144,1,0,0,0,144,146,1,0,0,0,145,143,1,0,0,0,146,147,5,7,0,0,147,13,1,0,
+		0,0,148,154,5,16,0,0,149,154,5,17,0,0,150,154,5,18,0,0,151,154,5,19,0,
+		0,152,154,5,41,0,0,153,148,1,0,0,0,153,149,1,0,0,0,153,150,1,0,0,0,153,
+		151,1,0,0,0,153,152,1,0,0,0,154,15,1,0,0,0,155,160,5,41,0,0,156,157,5,
+		41,0,0,157,158,5,8,0,0,158,160,3,18,9,0,159,155,1,0,0,0,159,156,1,0,0,
+		0,160,17,1,0,0,0,161,162,6,9,-1,0,162,163,7,0,0,0,163,195,3,18,9,16,164,
+		195,5,41,0,0,165,195,5,40,0,0,166,195,5,24,0,0,167,195,5,25,0,0,168,169,
+		5,41,0,0,169,178,5,1,0,0,170,175,3,18,9,0,171,172,5,6,0,0,172,174,3,18,
+		9,0,173,171,1,0,0,0,174,177,1,0,0,0,175,173,1,0,0,0,175,176,1,0,0,0,176,
+		179,1,0,0,0,177,175,1,0,0,0,178,170,1,0,0,0,178,179,1,0,0,0,179,180,1,
+		0,0,0,180,195,5,2,0,0,181,195,5,43,0,0,182,183,5,1,0,0,183,184,3,18,9,
+		0,184,185,5,2,0,0,185,195,1,0,0,0,186,187,5,26,0,0,187,195,5,41,0,0,188,
+		189,5,1,0,0,189,190,5,41,0,0,190,195,5,27,0,0,191,192,5,41,0,0,192,193,
+		5,15,0,0,193,195,3,20,10,0,194,161,1,0,0,0,194,164,1,0,0,0,194,165,1,0,
+		0,0,194,166,1,0,0,0,194,167,1,0,0,0,194,168,1,0,0,0,194,181,1,0,0,0,194,
+		182,1,0,0,0,194,186,1,0,0,0,194,188,1,0,0,0,194,191,1,0,0,0,195,216,1,
+		0,0,0,196,197,10,15,0,0,197,198,3,24,12,0,198,199,3,18,9,16,199,215,1,
+		0,0,0,200,201,10,14,0,0,201,202,3,22,11,0,202,203,3,18,9,15,203,215,1,
+		0,0,0,204,205,10,13,0,0,205,206,3,26,13,0,206,207,3,18,9,14,207,215,1,
+		0,0,0,208,209,10,12,0,0,209,210,5,22,0,0,210,215,3,18,9,12,211,212,10,
+		11,0,0,212,213,5,23,0,0,213,215,3,18,9,11,214,196,1,0,0,0,214,200,1,0,
+		0,0,214,204,1,0,0,0,214,208,1,0,0,0,214,211,1,0,0,0,215,218,1,0,0,0,216,
+		214,1,0,0,0,216,217,1,0,0,0,217,19,1,0,0,0,218,216,1,0,0,0,219,222,5,41,
+		0,0,220,221,5,15,0,0,221,223,3,20,10,0,222,220,1,0,0,0,222,223,1,0,0,0,
+		223,21,1,0,0,0,224,225,7,1,0,0,225,23,1,0,0,0,226,227,7,2,0,0,227,25,1,
+		0,0,0,228,229,7,3,0,0,229,27,1,0,0,0,18,31,37,48,52,62,69,82,129,135,143,
+		153,159,175,178,194,214,216,222
 	};
 
 	public static readonly ATN _ATN =
