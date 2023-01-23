@@ -69,7 +69,7 @@ expr
     | STR                           # EStr
     | '(' expr ')'                  # EParen
     | 'new' ID                      # ENew
-    | '(' ID  ') null'              # ENull
+    | '(' ID  ')' 'null'            # ENull
     | ID '.' fieldAccess            # EFieldAccessRHS
     ;
     

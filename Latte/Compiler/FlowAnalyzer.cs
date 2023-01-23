@@ -214,7 +214,7 @@ public class FlowAnalyzer
                 {
                     var register = fieldAccessTerm2.InstanceRegister;
 
-                    if (srToVr[register.Name] == null || instruction.FirstOperand is FieldAccessTerm)
+                    if (srToVr[register.Name] == null)
                     {
                         srToVr[register.Name] = vrName;
                         UpdateVr(ref vrCounter, ref vrName);
@@ -604,7 +604,7 @@ public class FlowAnalyzer
                 if (instruction.LeftHandSide.FieldAccessTerm != null)
                 {
                     accessTerm = instruction.LeftHandSide.FieldAccessTerm;
-                    accessTerm = new FieldAccessTerm(accessTerm.ClassSymbol, accessTerm.InstanceName, accessTerm.InnerFieldAccess, new RegisterTerm(accessTerm.InstanceRegister.Name, accessTerm.InstanceRegister.Type));
+                    accessTerm = new FieldAccessTerm(accessTerm.ClassSymbol, accessTerm.InstanceName, accessTerm.InnerFieldAccess, new RegisterTerm(accessTerm.InstanceRegister.Name, accessTerm.InstanceRegister.Type), accessTerm.Type);
                 }
                 
                 instruction.LeftHandSide = new RegisterTerm(
@@ -634,7 +634,7 @@ public class FlowAnalyzer
                     else if (arg is FieldAccessTerm fat)
                     {
                         args.Add(
-                            new FieldAccessTerm(fat.ClassSymbol, fat.InstanceName, fat.InnerFieldAccess, new RegisterTerm(fat.InstanceRegister.Name, fat.InstanceRegister.Type)));
+                            new FieldAccessTerm(fat.ClassSymbol, fat.InstanceName, fat.InnerFieldAccess, new RegisterTerm(fat.InstanceRegister.Name, fat.InstanceRegister.Type), fat.Type));
                     }
                     else
                     {

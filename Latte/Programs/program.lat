@@ -1,57 +1,45 @@
-class test {
-    int x;
-    int y;
-    string s;
-    test z;
+class list {
+  int elem;
+  list next;
 }
 
-class withBool {
-    boolean success;
-    boolean failure;
-}
-
-int main () {
-  test x = new test;
-  x.y = 15;
-  x.x = 23;
-  x.z = new test;
-  x.z.x = 11;
-  x.z.y = 333;
-  
-  printInt(x.x);
-  printInt(x.y);
-  printInt(x.z.x);
-  
-  int ret = testfun1(x.z);
-  
-  printInt(ret);
-  x.s = "haha";
-  printString(x.s + "uuu");
-  x.s = x.s + "XDDD";
-  printString(x.s);
-  
-  withBool r1 = new withBool;
-  r1.success = true;
-  r1.failure = false;
-  
-  if (r1.success || r1.failure) {
-    printInt(122);
-    x.y++;
-    printInt(x.y);
-    int z = x.y + x.x;
-    printInt(z);
-    x.x = testfun1(x);
-    
-    printInt(x.x);
-  }
-  
-
-  
+int main() {
+  printInt(length(fromTo(1,50)));
+  printInt(length2(fromTo(1,100)));
   return 0;
 }
 
-int testfun1(test x) {
-    printInt(x.y);
-    
-    return x.x;
+int head (list xs) {
+  return xs . elem;
+}
+ 
+list cons (int x, list xs) {
+  list n;
+  n = new list;
+  n.elem = x;
+  n.next = xs;
+  return n;
+}
+
+int length (list xs) {
+  if (xs==(list)null)
+    return 0;
+  else
+    return 1 + length (xs.next);
+}
+
+list fromTo (int m, int n) {
+  if (m>n)
+    return (list)null;
+  else 
+    return cons (m,fromTo (m+1,n));
+}
+
+int length2 (list xs) {
+  int res = 0;
+  while (xs != (list)null) {
+    res++;
+    xs = xs.next;
+  }
+  return res;
 }

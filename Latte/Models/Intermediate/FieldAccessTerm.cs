@@ -4,12 +4,13 @@ using Scopes;
 
 public class FieldAccessTerm : Term
 {
-    public FieldAccessTerm(ClassSymbol classSymbol, string instanceName, FieldAccess innerFieldAccess, RegisterTerm instanceRegister)
+    public FieldAccessTerm(ClassSymbol classSymbol, string instanceName, FieldAccess innerFieldAccess, RegisterTerm instanceRegister, string type)
     {
         ClassSymbol = classSymbol;
         InstanceName = instanceName;
         InnerFieldAccess = innerFieldAccess;
         InstanceRegister = instanceRegister;
+        Type = type;
     }
 
     public ClassSymbol ClassSymbol { get; set; }
@@ -19,6 +20,10 @@ public class FieldAccessTerm : Term
     public RegisterTerm InstanceRegister { get; set; }
     
     public FieldAccess InnerFieldAccess { get; set; }
+
+    public string Type { get; set; }
+    
+    // public RegisterTerm VirtualRegister { get; set; } = new 
     
     public override List<string> GetStringLiterals() => new();
     

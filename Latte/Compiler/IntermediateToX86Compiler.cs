@@ -8,27 +8,27 @@ public class IntermediateToX86Compiler
 {
     private readonly Dictionary<string, string> _literalsMap = new();
     private readonly Dictionary<string, int> _registerOffsetMap = new();
-    private List<string> _result = new();
+
+    private List<ClassSymbol> _classes;
+    private Dictionary<Register, bool> _marked = new();
+    private int _minusOffset;
+    private Stack<Register> _physicalRegistersStack = new();
 
     private int _previousBlock = -3;
-    private Dictionary<Register, bool> _marked = new();
-    private Stack<Register> _physicalRegistersStack = new();
+    private HashSet<Register> _prevRegistersUsed = new();
     private Dictionary<Register, int> _prNu = new();
     private Dictionary<Register, string> _prToVr = new();
+    private int _pushedRegistersOffset;
+
+    private int _pushes;
+
+    private HashSet<Register> _registersUsed = new();
+    private List<string> _result = new();
 
     private int _stackAlignedTo;
 
     private Dictionary<string, Register?> _vrToPr = new();
     private Dictionary<string, string> _vrToSr = new();
-
-    private int _pushes;
-    private int _minusOffset;
-    private int _pushedRegistersOffset;
-
-    private List<ClassSymbol> _classes;
-
-    private HashSet<Register> _registersUsed = new HashSet<Register>();
-    private HashSet<Register> _prevRegistersUsed = new HashSet<Register>();
 
     public IEnumerable<string> Compile(
         List<IntermediateFunction> functions,
@@ -36,7 +36,7 @@ public class IntermediateToX86Compiler
     {
         _classes = classes;
         var result = new List<string>();
-        
+
         var literals = functions
             .SelectMany(x => x.Instructions)
             .SelectMany(x => x.GetStringLiterals());
@@ -50,7 +50,7 @@ public class IntermediateToX86Compiler
         {
             Reset();
             CompileFunction(function);
-            Reset(); 
+            Reset();
             result.AddRange(CompileFunction(function));
         }
 
@@ -66,7 +66,7 @@ public class IntermediateToX86Compiler
 
         _result = new List<string> { GasSymbols.GenerateFunctionSymbol(function.Name) }.Concat(AddFnProlog())
             .Concat(_result).ToList();
-        
+
         if (_result.Last().Contains("RET"))
         {
             return _result;
@@ -146,7 +146,7 @@ public class IntermediateToX86Compiler
         minusOffset += (8 - (minusOffset % 8)) % 8;
 
         _minusOffset = minusOffset;
-        
+
         if (minusOffset != 0)
         {
             AddInstruction(GasSymbols.GenerateSubtract(Register.RSP, minusOffset));
@@ -154,11 +154,11 @@ public class IntermediateToX86Compiler
 
         _stackAlignedTo = (plusOffset - 8 + minusOffset + _pushedRegistersOffset) % 16;
 
-        bool previousInBool = false;
-        bool first = true;
+        var previousInBool = false;
+        var first = true;
         _prevRegistersUsed = _registersUsed;
         _registersUsed = new HashSet<Register>();
-        
+
         foreach (var instruction in instructions)
         {
             if (!first && !previousInBool && instruction.InBoolExpr)
@@ -189,7 +189,7 @@ public class IntermediateToX86Compiler
             }
 
             first = false;
-            
+
             if (_previousBlock != instruction.Block)
             {
                 _previousBlock = instruction.Block;
@@ -214,10 +214,10 @@ public class IntermediateToX86Compiler
         _physicalRegistersStack = new Stack<Register>();
         _marked = new Dictionary<Register, bool>();
         _vrToSr = new Dictionary<string, string>();
-        
-        var registersUsed = 
+
+        var registersUsed =
             instructions
-                .SelectMany(x => x.GetOperands().Concat(new List<RegisterTerm> {x.GetTarget()}))
+                .SelectMany(x => x.GetOperands().Concat(new List<RegisterTerm> { x.GetTarget() }))
                 .Where(x => x != null)
                 .Where(x => x.VirtualRegister != null);
 
@@ -276,7 +276,7 @@ public class IntermediateToX86Compiler
                 // {
                 //     argumentRegister.PhysicalRegister = pr.Value;
                 // }
-                
+
                 _vrToSr[argumentRegister.VirtualRegister] = argumentRegister.Name;
 
                 var pr = _vrToPr[argumentRegister.VirtualRegister];
@@ -389,7 +389,7 @@ public class IntermediateToX86Compiler
 
             _marked[pr.Value] = true;
         }
-        
+
         if (intermediateInstruction.SecondOperand is FieldAccessTerm fieldAccessTerm2)
         {
             var register = fieldAccessTerm2.InstanceRegister;
@@ -422,25 +422,35 @@ public class IntermediateToX86Compiler
         {
             if (firstOperandNew.NextUse == -1 && _prToVr[firstOperandNew.PhysicalRegister] != null)
             {
-                if (firstOperandNew.Identifier != null && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, firstOperandNew.Name) && block.LiveOut.Contains(firstOperandNew.Name))
+                if (firstOperandNew.Identifier != null &&
+                    !block.RedefinesRegisterAfterInstruction(intermediateInstruction, firstOperandNew.Name) &&
+                    block.LiveOut.Contains(firstOperandNew.Name))
                 {
-                    AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[firstOperandNew.VirtualRegister]], firstOperandNew.PhysicalRegister));
+                    AddInstruction(
+                        GasSymbols.GenerateMovToOffset(
+                            _registerOffsetMap[_vrToSr[firstOperandNew.VirtualRegister]],
+                            firstOperandNew.PhysicalRegister));
                 }
-                
+
                 FreeAPr(firstOperandNew.PhysicalRegister);
             }
         }
-        
+
         if (intermediateInstruction.FirstOperand is FieldAccessTerm fieldAccessTermNew)
         {
             var register = fieldAccessTermNew.InstanceRegister;
             if (register.NextUse == -1 && _prToVr[register.PhysicalRegister] != null)
             {
-                if (register.Identifier != null && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, register.Name) && block.LiveOut.Contains(register.Name))
+                if (register.Identifier != null &&
+                    !block.RedefinesRegisterAfterInstruction(intermediateInstruction, register.Name) &&
+                    block.LiveOut.Contains(register.Name))
                 {
-                    AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[register.VirtualRegister]], register.PhysicalRegister));
+                    AddInstruction(
+                        GasSymbols.GenerateMovToOffset(
+                            _registerOffsetMap[_vrToSr[register.VirtualRegister]],
+                            register.PhysicalRegister));
                 }
-                
+
                 FreeAPr(register.PhysicalRegister);
                 _marked[register.PhysicalRegister] = true;
             }
@@ -468,25 +478,35 @@ public class IntermediateToX86Compiler
         {
             if (secondOperandNew.NextUse == -1 && _prToVr[secondOperandNew.PhysicalRegister] != null)
             {
-                if (secondOperandNew.Identifier != null  && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, secondOperandNew.Name) && block.LiveOut.Contains(secondOperandNew.Name))
+                if (secondOperandNew.Identifier != null &&
+                    !block.RedefinesRegisterAfterInstruction(intermediateInstruction, secondOperandNew.Name) &&
+                    block.LiveOut.Contains(secondOperandNew.Name))
                 {
-                    AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[secondOperandNew.VirtualRegister]], secondOperandNew.PhysicalRegister));
+                    AddInstruction(
+                        GasSymbols.GenerateMovToOffset(
+                            _registerOffsetMap[_vrToSr[secondOperandNew.VirtualRegister]],
+                            secondOperandNew.PhysicalRegister));
                 }
-                
+
                 FreeAPr(secondOperandNew.PhysicalRegister);
             }
         }
-        
+
         if (intermediateInstruction.SecondOperand is FieldAccessTerm fieldAccessTermNew2)
         {
             var register = fieldAccessTermNew2.InstanceRegister;
             if (register.NextUse == -1 && _prToVr[register.PhysicalRegister] != null)
             {
-                if (register.Identifier != null && !block.RedefinesRegisterAfterInstruction(intermediateInstruction, register.Name) && block.LiveOut.Contains(register.Name))
+                if (register.Identifier != null &&
+                    !block.RedefinesRegisterAfterInstruction(intermediateInstruction, register.Name) &&
+                    block.LiveOut.Contains(register.Name))
                 {
-                    AddInstruction(GasSymbols.GenerateMovToOffset(_registerOffsetMap[_vrToSr[register.VirtualRegister]], register.PhysicalRegister));
+                    AddInstruction(
+                        GasSymbols.GenerateMovToOffset(
+                            _registerOffsetMap[_vrToSr[register.VirtualRegister]],
+                            register.PhysicalRegister));
                 }
-                
+
                 FreeAPr(register.PhysicalRegister);
                 _marked[register.PhysicalRegister] = true;
             }
@@ -505,11 +525,11 @@ public class IntermediateToX86Compiler
             {
                 var prev = _vrToSr
                     .Where(x => x.Value == lhs.Name);
-                
+
                 foreach (var x in prev.Select(x => x.Key))
                 {
                     var pr = _vrToPr.GetValueOrDefault(x);
-            
+
                     if (pr != null)
                     {
                         _vrToPr.Remove(x);
@@ -518,7 +538,7 @@ public class IntermediateToX86Compiler
                     }
                 }
             }
-            
+
             if (lhs.FieldAccessTerm != null)
             {
                 var fat = lhs.FieldAccessTerm;
@@ -545,7 +565,7 @@ public class IntermediateToX86Compiler
                     register.PhysicalRegister = pr.Value;
                 }
             }
-            
+
             _vrToSr[lhs.VirtualRegister] = lhs.Name;
 
             lhs.PhysicalRegister = GetAPr(
@@ -734,7 +754,7 @@ public class IntermediateToX86Compiler
                 AddInstruction(GasSymbols.GenerateMovFromOffset(offset, Register.RAX));
                 opFieldAccess.InstanceRegister.PhysicalRegister = Register.RAX;
             }
-            
+
             SaveFieldAccessToRegister(opFieldAccess, Register.RAX, true);
         }
 
@@ -764,17 +784,19 @@ public class IntermediateToX86Compiler
             {
                 if (x.InnerFieldAccess == null)
                 {
-                    AddInstruction(GasSymbols.GenerateLeaFromMemory(
-                        register.PhysicalRegister, 
-                        fieldAccessTerm.ClassSymbol.GetFieldOffset(x.ClassField), 
-                        intermediateInstruction.LeftHandSide.PhysicalRegister));
+                    AddInstruction(
+                        GasSymbols.GenerateLeaFromMemory(
+                            register.PhysicalRegister,
+                            fieldAccessTerm.ClassSymbol.GetFieldOffset(x.ClassField),
+                            intermediateInstruction.LeftHandSide.PhysicalRegister));
                 }
                 else
                 {
-                    AddInstruction(GasSymbols.GenerateMovFromMemory(
-                        register.PhysicalRegister, 
-                        fieldAccessTerm.ClassSymbol.GetFieldOffset(x.ClassField), 
-                        intermediateInstruction.LeftHandSide.PhysicalRegister));
+                    AddInstruction(
+                        GasSymbols.GenerateMovFromMemory(
+                            register.PhysicalRegister,
+                            fieldAccessTerm.ClassSymbol.GetFieldOffset(x.ClassField),
+                            intermediateInstruction.LeftHandSide.PhysicalRegister));
                 }
 
                 var fieldSymbol = fieldAccessTerm.ClassSymbol.Fields.FirstOrDefault(y => y.Name == x.ClassField);
@@ -799,12 +821,13 @@ public class IntermediateToX86Compiler
                 }
                 else
                 {
-                    AddInstruction(GasSymbols.GenerateMovFromMemory(
-                        intermediateInstruction.LeftHandSide.PhysicalRegister,
-                        currentClass.GetFieldOffset(x.ClassField),
-                        intermediateInstruction.LeftHandSide.PhysicalRegister));
-                } 
-                
+                    AddInstruction(
+                        GasSymbols.GenerateMovFromMemory(
+                            intermediateInstruction.LeftHandSide.PhysicalRegister,
+                            currentClass.GetFieldOffset(x.ClassField),
+                            intermediateInstruction.LeftHandSide.PhysicalRegister));
+                }
+
                 var fieldSymbol = currentClass.Fields.FirstOrDefault(y => y.Name == x.ClassField);
                 var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
 
@@ -828,10 +851,19 @@ public class IntermediateToX86Compiler
         {
             AddInstruction(GasSymbols.GeneratePush(Register.RDI));
         }
-        
+
         AddInstruction($"MOV RDI, {size}");
         AddInstruction("CALL _malloc");
+
+        var offset = 0;
         
+        foreach (var _ in classPrototype.Fields)
+        {
+            AddInstruction(offset == 0 ? $"MOV QWORD PTR [RDI], 0" : $"MOV QWORD PTR [RDI+{offset}], 0");
+
+            offset += 8;
+        }
+
         if (_vrToPr.ContainsValue(Register.RDI))
         {
             AddInstruction(GasSymbols.GeneratePop(Register.RDI));
@@ -857,10 +889,10 @@ public class IntermediateToX86Compiler
             {
                 AddInstruction(GasSymbols.GeneratePush(Register.RDI));
             }
-        
+
             AddInstruction($"MOV RDI, {size}");
             AddInstruction("CALL _malloc");
-        
+
             if (_vrToPr.ContainsValue(Register.RDI))
             {
                 AddInstruction(GasSymbols.GeneratePop(Register.RDI));
@@ -875,15 +907,21 @@ public class IntermediateToX86Compiler
             }
             else
             {
-                var fat = intermediateInstruction.LeftHandSide.FieldAccessTerm;
-                SaveFieldAccessToRegister(fat, intermediateInstruction.LeftHandSide.PhysicalRegister, false);
-                AddInstruction(GasSymbols.GenerateMov(Register.RAX, intermediateInstruction.LeftHandSide.PhysicalRegister, true));
+                SaveFieldAccessToRegister(intermediateInstruction.LeftHandSide.FieldAccessTerm, intermediateInstruction.LeftHandSide.PhysicalRegister);
+                AddInstruction(
+                    GasSymbols.GenerateMov(Register.RAX, intermediateInstruction.LeftHandSide.PhysicalRegister, true));
             }
 
 
             return;
         }
-        
+
+        if (intermediateInstruction.FirstOperand is ConstantNullTerm)
+        {
+            AddInstruction(
+                GasSymbols.GenerateMov(0, intermediateInstruction.LeftHandSide.PhysicalRegister, toMemory));
+        }
+
         if (intermediateInstruction.LeftHandSide.FieldAccessTerm != null)
         {
             // if (intermediateInstruction.LeftHandSide.FieldAccessTerm.)
@@ -894,18 +932,22 @@ public class IntermediateToX86Compiler
             if (intermediateInstruction.FirstOperand is RegisterTerm)
             {
                 SaveFieldAccessToRegister(
-                    intermediateInstruction.LeftHandSide.FieldAccessTerm, 
+                    intermediateInstruction.LeftHandSide.FieldAccessTerm,
                     Register.RAX);
             }
             else
             {
                 SaveFieldAccessToRegister(
-                    intermediateInstruction.LeftHandSide.FieldAccessTerm, 
+                    intermediateInstruction.LeftHandSide.FieldAccessTerm,
                     intermediateInstruction.LeftHandSide.PhysicalRegister);
             }
         }
-        
-        
+
+        if (intermediateInstruction.FirstOperand is FieldAccessTerm fat)
+        {
+            SaveFieldAccessToRegister(fat, intermediateInstruction.LeftHandSide.PhysicalRegister, true);
+        }
+
         if (intermediateInstruction.FirstOperand is ConstantIntTerm intTerm)
         {
             AddInstruction(
@@ -928,7 +970,7 @@ public class IntermediateToX86Compiler
                     _pushes++;
                     if (_registerOffsetMap.Values.Any())
                     {
-                        _registerOffsetMap[intermediateInstruction.LeftHandSide.Name] = 
+                        _registerOffsetMap[intermediateInstruction.LeftHandSide.Name] =
                             _registerOffsetMap.Values.Min() - 8;
                     }
                     else
@@ -939,7 +981,7 @@ public class IntermediateToX86Compiler
 
                 return;
             }
-            
+
             AddInstruction(
                 GasSymbols.GenerateMov(
                     Convert.ToInt32(boolTerm.Value),
@@ -954,12 +996,16 @@ public class IntermediateToX86Compiler
             if (toMemory)
             {
                 AddInstruction(GasSymbols.GenerateLeaForLiteral(label, Register.RAX));
-                AddInstruction(GasSymbols.GenerateMov(Register.RAX, intermediateInstruction.LeftHandSide.PhysicalRegister, toMemory));
+                AddInstruction(
+                    GasSymbols.GenerateMov(
+                        Register.RAX,
+                        intermediateInstruction.LeftHandSide.PhysicalRegister,
+                        toMemory));
             }
             else
             {
-                AddInstruction(GasSymbols.GenerateLeaForLiteral(label, intermediateInstruction.LeftHandSide.PhysicalRegister));
-
+                AddInstruction(
+                    GasSymbols.GenerateLeaForLiteral(label, intermediateInstruction.LeftHandSide.PhysicalRegister));
             }
         }
 
@@ -972,8 +1018,9 @@ public class IntermediateToX86Compiler
                         registerTerm.PhysicalRegister,
                         Register.RAX,
                         toMemory));
-                
-                AddInstruction(GasSymbols.GenerateMov(Register.RAX, intermediateInstruction.LeftHandSide.PhysicalRegister));
+
+                AddInstruction(
+                    GasSymbols.GenerateMov(Register.RAX, intermediateInstruction.LeftHandSide.PhysicalRegister));
             }
             else
             {
@@ -996,7 +1043,7 @@ public class IntermediateToX86Compiler
         {
             SaveFieldAccessToRegister(fat, Register.RAX);
             AddInstruction(GasSymbols.GenerateIncrementAddress(Register.RAX));
-        } 
+        }
     }
 
     private void GenerateDecrement(Term operand)
@@ -1010,7 +1057,7 @@ public class IntermediateToX86Compiler
         {
             SaveFieldAccessToRegister(fat, Register.RAX);
             AddInstruction(GasSymbols.GenerateDecrementAddress(Register.RAX));
-        } 
+        }
     }
 
     private void GenerateFunctionCall(Term term, RegisterTerm target = null)
@@ -1037,15 +1084,15 @@ public class IntermediateToX86Compiler
             .Count(pair => pair.Second == Register.None);
 
 
-
-        var registersToSave = _vrToPr.Values.Where(x => x != null).Select(x => x.Value).Intersect(GasSymbols.NotPreservedRegisters);
+        var registersToSave = _vrToPr.Values.Where(x => x != null).Select(x => x.Value)
+            .Intersect(GasSymbols.NotPreservedRegisters);
         var registersToSaveReverse = registersToSave.Reverse();
 
         foreach (var registerToSave in registersToSave)
         {
             AddInstruction(GasSymbols.GeneratePush(registerToSave));
         }
-        
+
         // Based on number of pushes we have to do, do we have to push dummy 8 byte word to
         // align stack?
         var shouldAlignStack = ((pushesCount * 8) + _stackAlignedTo) % 16 != 0;
@@ -1082,6 +1129,26 @@ public class IntermediateToX86Compiler
                             AddInstruction(GasSymbols.GenerateMov(intTerm.Value, register));
                         }
                     }
+
+                    break;
+                case ConstantNullTerm:
+                    if (register == Register.None)
+                    {
+                        AddInstruction(GasSymbols.GeneratePush(0));
+                    }
+                    else
+                    {
+                        if (GasSymbols.ParamRegisters.Contains(register))
+                        {
+                            AddInstruction(GasSymbols.GeneratePush(0));
+                            pushedRegisters.Push(register);
+                        }
+                        else
+                        {
+                            AddInstruction(GasSymbols.GenerateMov(0, register));
+                        }
+                    }
+
                     break;
                 case ConstantBoolTerm boolTerm:
                     if (register == Register.None)
@@ -1100,6 +1167,7 @@ public class IntermediateToX86Compiler
                             AddInstruction(GasSymbols.GenerateMov(Convert.ToInt32(boolTerm.Value), register));
                         }
                     }
+
                     break;
                 case ConstantStringTerm stringTerm:
                     if (register == Register.None)
@@ -1111,7 +1179,8 @@ public class IntermediateToX86Compiler
                     {
                         if (GasSymbols.ParamRegisters.Contains(register))
                         {
-                            AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[stringTerm.Value], Register.RAX));
+                            AddInstruction(
+                                GasSymbols.GenerateLeaForLiteral(_literalsMap[stringTerm.Value], Register.RAX));
                             AddInstruction(GasSymbols.GeneratePush(Register.RAX));
                             pushedRegisters.Push(register);
                         }
@@ -1120,6 +1189,7 @@ public class IntermediateToX86Compiler
                             AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[stringTerm.Value], register));
                         }
                     }
+
                     break;
                 case FieldAccessTerm fat:
                     SaveFieldAccessToRegister(fat, Register.RAX, true);
@@ -1139,6 +1209,7 @@ public class IntermediateToX86Compiler
                             AddInstruction(GasSymbols.GenerateMov(Register.RAX, register));
                         }
                     }
+
                     break;
                 case RegisterTerm registerTerm:
                 {
@@ -1161,7 +1232,8 @@ public class IntermediateToX86Compiler
 
                     if (register == Register.None && pr == Register.None)
                     {
-                        AddInstruction(GasSymbols.GenerateMovFromOffset(_registerOffsetMap[registerTerm.Name], Register.RAX));
+                        AddInstruction(
+                            GasSymbols.GenerateMovFromOffset(_registerOffsetMap[registerTerm.Name], Register.RAX));
                         AddInstruction(GasSymbols.GeneratePush(Register.RAX));
                     }
 
@@ -1172,7 +1244,8 @@ public class IntermediateToX86Compiler
 
                     if (register != Register.None && pr == Register.None)
                     {
-                        AddInstruction(GasSymbols.GenerateMovFromOffset(_registerOffsetMap[registerTerm.Name], register));
+                        AddInstruction(
+                            GasSymbols.GenerateMovFromOffset(_registerOffsetMap[registerTerm.Name], register));
                     }
 
                     if (register != Register.None && pr != Register.None)
@@ -1187,6 +1260,7 @@ public class IntermediateToX86Compiler
                             AddInstruction(GasSymbols.GenerateMov(pr.Value, register));
                         }
                     }
+
                     break;
                 }
             }
@@ -1196,27 +1270,25 @@ public class IntermediateToX86Compiler
         {
             AddInstruction(GasSymbols.GeneratePop(pushedRegisters.Pop()));
         }
-        
+
         AddInstruction(GasSymbols.GenerateFunctionCall(functionCallTerm.Name));
-        
+
         var toSubtractFromStack = (pushesCount * 8) + (shouldAlignStack ? 8 : 0);
-        
+
         if (toSubtractFromStack > 0)
         {
             AddInstruction(GasSymbols.GenerateAdd(Register.RSP, toSubtractFromStack));
         }
-        
+
         foreach (var registerToSave in registersToSaveReverse)
         {
             AddInstruction(GasSymbols.GeneratePop(registerToSave));
         }
 
-        if (target == null)
+        if (target != null)
         {
-            return;
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
         }
-        
-        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
     }
 
     private void GenerateReturn(Term term)
@@ -1232,6 +1304,11 @@ public class IntermediateToX86Compiler
             case RegisterTerm registerTerm:
             {
                 AddInstruction(GasSymbols.GenerateMov(registerTerm.PhysicalRegister, Register.RAX));
+                break;
+            }
+            case ConstantNullTerm:
+            {
+                AddInstruction(GasSymbols.GenerateMov(0, Register.RAX));
                 break;
             }
             case FieldAccessTerm fat:
@@ -1255,7 +1332,7 @@ public class IntermediateToX86Compiler
         {
             (left, right) = (right, left);
         }
-        
+
         var leftRegister = left as RegisterTerm;
         var rightRegister = right as RegisterTerm;
         var rightInt = right as ConstantIntTerm;
@@ -1277,7 +1354,7 @@ public class IntermediateToX86Compiler
 
                 return;
             }
-            
+
             AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RAX));
             AddInstruction(GasSymbols.GenerateAdd(Register.RAX, rightRegister.PhysicalRegister));
             AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
@@ -1295,7 +1372,7 @@ public class IntermediateToX86Compiler
 
                     return;
                 }
-            
+
                 AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
                 AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, rightInt.Value));
             }
@@ -1308,7 +1385,7 @@ public class IntermediateToX86Compiler
 
                     return;
                 }
-            
+
                 SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
                 AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
                 AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, Register.RAX));
@@ -1373,8 +1450,7 @@ public class IntermediateToX86Compiler
         }
 
         AddInstruction(GasSymbols.GenerateFunctionCall("concatStrings"));
-        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
-        
+
         if (rsiUsed)
         {
             AddInstruction(GasSymbols.GeneratePop(Register.RSI));
@@ -1384,6 +1460,8 @@ public class IntermediateToX86Compiler
         {
             AddInstruction(GasSymbols.GeneratePop(Register.RDI));
         }
+
+        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
     }
 
     private void GenerateSubtract(Term left, Term right, RegisterTerm target)
@@ -1392,6 +1470,8 @@ public class IntermediateToX86Compiler
         var rightRegister = right as RegisterTerm;
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
+        var leftFieldAccess = left as FieldAccessTerm;
+        var rightFieldAccess = right as FieldAccessTerm;
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -1409,7 +1489,7 @@ public class IntermediateToX86Compiler
 
                 return;
             }
-            
+
             AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RAX));
             AddInstruction(GasSymbols.GenerateSubtract(Register.RAX, rightRegister.PhysicalRegister));
             AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
@@ -1419,37 +1499,110 @@ public class IntermediateToX86Compiler
 
         if (leftRegister != null)
         {
-            if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+            if (rightInt != null)
             {
-                AddInstruction(GasSymbols.GenerateSubtract(leftRegister.PhysicalRegister, rightInt.Value));
+                if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+                {
+                    AddInstruction(GasSymbols.GenerateSubtract(leftRegister.PhysicalRegister, rightInt.Value));
+
+                    return;
+                }
+
+                AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightInt.Value));
+            }
+            else
+            {
+                if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+                {
+                    SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+                    AddInstruction(GasSymbols.GenerateSubtract(leftRegister.PhysicalRegister, Register.RAX));
+
+                    return;
+                }
+
+                SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+                AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateAdd(target.PhysicalRegister, Register.RAX));
+            }
+
+            return;
+        }
+
+        if (leftInt != null && rightRegister != null)
+        {
+            if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+            {
+                AddInstruction(GasSymbols.GenerateSubtract(rightRegister.PhysicalRegister, leftInt.Value));
+                AddInstruction(GasSymbols.GenerateNegation(rightRegister.PhysicalRegister));
 
                 return;
             }
-            
-            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
-            AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightInt.Value));
+
+            AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
+            AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightRegister.PhysicalRegister));
 
             return;
         }
 
-        if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+        if (leftFieldAccess != null && rightRegister != null)
         {
-            AddInstruction(GasSymbols.GenerateSubtract(rightRegister.PhysicalRegister, leftInt.Value));
-            AddInstruction(GasSymbols.GenerateNegation(rightRegister.PhysicalRegister));
+            if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+            {
+                SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+                AddInstruction(GasSymbols.GenerateSubtract(rightRegister.PhysicalRegister, Register.RAX));
+                AddInstruction(GasSymbols.GenerateNegation(rightRegister.PhysicalRegister));
+
+                return;
+            }
+
+            SaveFieldAccessToRegister(leftFieldAccess, target.PhysicalRegister, true);
+            AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightRegister.PhysicalRegister));
 
             return;
         }
-            
-        AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
-        AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, rightRegister.PhysicalRegister));
+
+        if (leftInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
+        }
+
+        if (rightInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(rightInt.Value, Register.RAX));
+        }
+
+        if (leftFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(leftFieldAccess, target.PhysicalRegister, true);
+        }
+
+        if (rightFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+        }
+
+        AddInstruction(GasSymbols.GenerateSubtract(target.PhysicalRegister, Register.RAX));
     }
 
     private void GenerateMultiply(Term left, Term right, RegisterTerm target)
     {
+        if (left is not RegisterTerm && right is RegisterTerm)
+        {
+            (left, right) = (right, left);
+        }
+
+        if (left is ConstantIntTerm && right is FieldAccessTerm)
+        {
+            (left, right) = (right, left);
+        }
+
         var leftRegister = left as RegisterTerm;
         var rightRegister = right as RegisterTerm;
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
+        var leftFieldAccess = left as FieldAccessTerm;
+        var rightFieldAccess = right as FieldAccessTerm;
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -1466,7 +1619,7 @@ public class IntermediateToX86Compiler
 
                 return;
             }
-            
+
             AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RAX));
             AddInstruction(GasSymbols.GenerateMultiply(Register.RAX, rightRegister.PhysicalRegister));
             AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
@@ -1476,28 +1629,48 @@ public class IntermediateToX86Compiler
 
         if (leftRegister != null)
         {
-            if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+            if (rightInt != null)
             {
-                AddInstruction(GasSymbols.GenerateMultiply(leftRegister.PhysicalRegister, rightInt.Value));
+                if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+                {
+                    AddInstruction(GasSymbols.GenerateMultiply(leftRegister.PhysicalRegister, rightInt.Value));
 
-                return;
+                    return;
+                }
+
+                AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightInt.Value));
             }
-            
-            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
-            AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightInt.Value));
+            else
+            {
+                if (leftRegister.PhysicalRegister == target.PhysicalRegister)
+                {
+                    SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+                    AddInstruction(GasSymbols.GenerateMultiply(leftRegister.PhysicalRegister, Register.RAX));
+
+                    return;
+                }
+
+                SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+                AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, target.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, Register.RAX));
+            }
 
             return;
         }
 
-        if (rightRegister.PhysicalRegister == target.PhysicalRegister)
+        if (leftFieldAccess != null && rightInt != null)
         {
-            AddInstruction(GasSymbols.GenerateMultiply(rightRegister.PhysicalRegister, leftInt.Value));
-
-            return;
+            SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+            AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightInt.Value));
         }
-            
-        AddInstruction(GasSymbols.GenerateMov(leftInt.Value, target.PhysicalRegister));
-        AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, rightRegister.PhysicalRegister));
+
+        if (leftFieldAccess != null && rightFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(leftFieldAccess, target.PhysicalRegister, true);
+            SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+            AddInstruction(GasSymbols.GenerateMultiply(target.PhysicalRegister, Register.RAX));
+        }
     }
 
     private void GenerateDivide(Term left, Term right, RegisterTerm target)
@@ -1506,25 +1679,81 @@ public class IntermediateToX86Compiler
         var rightRegister = right as RegisterTerm;
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
+        var leftFieldAccess = left as FieldAccessTerm;
+        var rightFieldAccess = right as FieldAccessTerm;
+        var rdxUsed = _vrToPr.Values.Any(x => x == Register.RDX);
+
+        if (rdxUsed)
+        {
+            AddInstruction(GasSymbols.GeneratePush(Register.RDX));
+        }
 
         if (leftRegister != null && rightRegister != null)
         {
             AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightRegister.PhysicalRegister));
             AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
 
+            if (rdxUsed)
+            {
+                AddInstruction(GasSymbols.GeneratePop(Register.RDX));
+            }
+
             return;
         }
 
         if (leftRegister != null)
         {
-            AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightInt.Value));
-            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+            if (rightInt != null)
+            {
+                AddInstruction(
+                    GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightInt.Value, target.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+            }
+            else
+            {
+                AddInstruction($"MOV RAX, {leftRegister}");
+                SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+                AddInstruction("CQO");
+                AddInstruction($"IDIV {target.PhysicalRegister}");
+                AddInstruction($"MOV {target.PhysicalRegister}, RAX");
+            }
+
+            if (rdxUsed)
+            {
+                AddInstruction(GasSymbols.GeneratePop(Register.RDX));
+            }
 
             return;
         }
 
-        AddInstruction(GasSymbols.GenerateDivide(leftInt.Value, rightRegister.PhysicalRegister));
-        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+        if (leftInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(leftInt.Value, Register.RAX));
+        }
+
+        if (rightInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(rightInt.Value, target.PhysicalRegister));
+        }
+
+        if (leftFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+        }
+
+        if (rightFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+        }
+
+        AddInstruction("CQO");
+        AddInstruction($"IDIV {target.PhysicalRegister}");
+        AddInstruction($"MOV {target.PhysicalRegister}, RAX");
+
+        if (rdxUsed)
+        {
+            AddInstruction(GasSymbols.GeneratePop(Register.RDX));
+        }
     }
 
     private void GenerateModulo(Term left, Term right, RegisterTerm target)
@@ -1533,25 +1762,81 @@ public class IntermediateToX86Compiler
         var rightRegister = right as RegisterTerm;
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
+        var leftFieldAccess = left as FieldAccessTerm;
+        var rightFieldAccess = right as FieldAccessTerm;
+        var rdxUsed = _vrToPr.Values.Any(x => x == Register.RDX);
+
+        if (rdxUsed)
+        {
+            AddInstruction(GasSymbols.GeneratePush(Register.RDX));
+        }
 
         if (leftRegister != null && rightRegister != null)
         {
             AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightRegister.PhysicalRegister));
             AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
 
+            if (rdxUsed)
+            {
+                AddInstruction(GasSymbols.GeneratePop(Register.RDX));
+            }
+
             return;
         }
 
         if (leftRegister != null)
         {
-            AddInstruction(GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightInt.Value));
-            AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
+            if (rightInt != null)
+            {
+                AddInstruction(
+                    GasSymbols.GenerateDivide(leftRegister.PhysicalRegister, rightInt.Value, target.PhysicalRegister));
+                AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
+            }
+            else
+            {
+                AddInstruction($"MOV RAX, {leftRegister}");
+                SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+                AddInstruction("CQO");
+                AddInstruction($"IDIV {target.PhysicalRegister}");
+                AddInstruction($"MOV {target.PhysicalRegister}, RDX");
+            }
+
+            if (rdxUsed)
+            {
+                AddInstruction(GasSymbols.GeneratePop(Register.RDX));
+            }
 
             return;
         }
 
-        AddInstruction(GasSymbols.GenerateDivide(leftInt.Value, rightRegister.PhysicalRegister));
-        AddInstruction(GasSymbols.GenerateMov(Register.RDX, target.PhysicalRegister));
+        if (leftInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(leftInt.Value, Register.RAX));
+        }
+
+        if (rightInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(rightInt.Value, target.PhysicalRegister));
+        }
+
+        if (leftFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+        }
+
+        if (rightFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+        }
+
+        AddInstruction("CQO");
+        AddInstruction($"IDIV {target.PhysicalRegister}");
+        AddInstruction($"MOV {target.PhysicalRegister}, RDX");
+
+        if (rdxUsed)
+        {
+            AddInstruction(GasSymbols.GeneratePop(Register.RDX));
+        }
     }
 
     private void GenerateEqual(Term left, Term right, RegisterTerm target) =>
@@ -1567,11 +1852,25 @@ public class IntermediateToX86Compiler
             (left, right) = (right, left);
         }
 
+        if (left is ConstantNullTerm or ConstantIntTerm or ConstantBoolTerm or ConstantStringTerm &&
+            right is FieldAccessTerm)
+        {
+            (left, right) = (right, left);
+        }
+
         var leftRegister = left as RegisterTerm;
+        var leftInt = left as ConstantIntTerm;
+        var leftBool = left as ConstantBoolTerm;
+        var leftString = left as ConstantStringTerm;
+        var leftNull = left as ConstantNullTerm;
+        var leftFieldAccess = left as FieldAccessTerm;
         var rightRegister = right as RegisterTerm;
         var rightInt = right as ConstantIntTerm;
         var rightBool = right as ConstantBoolTerm;
         var rightString = right as ConstantStringTerm;
+        var rightNull = right as ConstantNullTerm;
+        var rightFieldAccess = right as FieldAccessTerm;
+
         var rdiUsed = _vrToPr.ContainsValue(Register.RDI);
         var rsiUsed = _vrToPr.ContainsValue(Register.RSI);
 
@@ -1588,10 +1887,10 @@ public class IntermediateToX86Compiler
                 {
                     AddInstruction(GasSymbols.GeneratePush(Register.RSI));
                 }
-                
+
                 AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RDI));
                 AddInstruction(GasSymbols.GenerateMov(rightRegister.PhysicalRegister, Register.RSI));
-                
+
                 AddInstruction(GasSymbols.GenerateFunctionCall("compareStrings"));
                 AddInstruction(GasSymbols.GenerateTest(Register.RAX, Register.RAX));
 
@@ -1599,7 +1898,7 @@ public class IntermediateToX86Compiler
                     equal
                         ? GasSymbols.GenerateSetNotEqual(target.PhysicalRegister)
                         : GasSymbols.GenerateSetEqual(target.PhysicalRegister));
-                
+
                 if (rdiUsed)
                 {
                     AddInstruction(GasSymbols.GeneratePop(Register.RSI));
@@ -1622,7 +1921,94 @@ public class IntermediateToX86Compiler
             return;
         }
 
-        if (leftRegister.Type == LatteType.String)
+        if (leftRegister != null)
+        {
+            if (leftRegister.Type == LatteType.String)
+            {
+                if (rdiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePush(Register.RDI));
+                }
+
+                if (rsiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePush(Register.RSI));
+                }
+
+                AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RDI));
+
+                if (rightString != null)
+                {
+                    AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[rightString.Value], Register.RSI));
+                }
+                else
+                {
+                    SaveFieldAccessToRegister(rightFieldAccess, Register.RSI, true);
+                }
+
+                AddInstruction(GasSymbols.GenerateFunctionCall("compareStrings"));
+                AddInstruction(GasSymbols.GenerateTest(Register.RAX, Register.RAX));
+                AddInstruction(
+                    equal
+                        ? GasSymbols.GenerateSetNotEqual(target.PhysicalRegister)
+                        : GasSymbols.GenerateSetEqual(target.PhysicalRegister));
+
+                if (rdiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePop(Register.RSI));
+                }
+
+                if (rsiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePop(Register.RDI));
+                }
+
+                return;
+            }
+
+
+            if (rightFieldAccess != null)
+            {
+                SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+
+                AddInstruction(GasSymbols.GenerateCmp(leftRegister.PhysicalRegister, Register.RAX));
+            }
+            else
+            {
+                var value = 0;
+
+                if (rightInt != null || rightBool != null)
+                {
+                    value = rightInt?.Value ?? Convert.ToInt32(rightBool.Value);
+                    ;
+                }
+
+                AddInstruction(GasSymbols.GenerateCmp(leftRegister.PhysicalRegister, value));
+            }
+
+            AddInstruction(
+                equal
+                    ? GasSymbols.GenerateSetEqual(target.PhysicalRegister)
+                    : GasSymbols.GenerateSetNotEqual(target.PhysicalRegister));
+
+            return;
+        }
+
+        if (rightInt != null || rightBool != null)
+        {
+            var value = rightInt?.Value ?? Convert.ToInt32(rightBool.Value);
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+            AddInstruction(GasSymbols.GenerateCmp(Register.RAX, value));
+
+            AddInstruction(
+                equal
+                    ? GasSymbols.GenerateSetEqual(target.PhysicalRegister)
+                    : GasSymbols.GenerateSetNotEqual(target.PhysicalRegister));
+
+            return;
+        }
+
+        if (rightString != null)
         {
             if (rdiUsed)
             {
@@ -1633,8 +2019,8 @@ public class IntermediateToX86Compiler
             {
                 AddInstruction(GasSymbols.GeneratePush(Register.RSI));
             }
-            
-            AddInstruction(GasSymbols.GenerateMov(leftRegister.PhysicalRegister, Register.RDI));
+
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RDI, true);
             AddInstruction(GasSymbols.GenerateLeaForLiteral(_literalsMap[rightString.Value], Register.RSI));
 
             AddInstruction(GasSymbols.GenerateFunctionCall("compareStrings"));
@@ -1643,7 +2029,7 @@ public class IntermediateToX86Compiler
                 equal
                     ? GasSymbols.GenerateSetNotEqual(target.PhysicalRegister)
                     : GasSymbols.GenerateSetEqual(target.PhysicalRegister));
-            
+
             if (rdiUsed)
             {
                 AddInstruction(GasSymbols.GeneratePop(Register.RSI));
@@ -1657,74 +2043,65 @@ public class IntermediateToX86Compiler
             return;
         }
 
-        var value = rightInt?.Value ?? Convert.ToInt32(rightBool.Value);
+        if (rightNull != null)
+        {
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+            AddInstruction(GasSymbols.GenerateCmp(Register.RAX, 0));
 
-        AddInstruction(GasSymbols.GenerateCmp(leftRegister.PhysicalRegister, value));
-        AddInstruction(
-            equal
-                ? GasSymbols.GenerateSetEqual(target.PhysicalRegister)
-                : GasSymbols.GenerateSetNotEqual(target.PhysicalRegister));
+            AddInstruction(
+                equal
+                    ? GasSymbols.GenerateSetEqual(target.PhysicalRegister)
+                    : GasSymbols.GenerateSetNotEqual(target.PhysicalRegister));
+
+            return;
+        }
+
+        if (leftFieldAccess != null && rightFieldAccess != null)
+        {
+            if (leftFieldAccess.Type == LatteType.String)
+            {
+                if (rdiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePush(Register.RDI));
+                }
+
+                if (rsiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePush(Register.RSI));
+                }
+
+                SaveFieldAccessToRegister(leftFieldAccess, Register.RDI, true);
+                SaveFieldAccessToRegister(rightFieldAccess, Register.RSI, true);
+
+                AddInstruction(GasSymbols.GenerateFunctionCall("compareStrings"));
+                AddInstruction(GasSymbols.GenerateTest(Register.RAX, Register.RAX));
+                AddInstruction(
+                    equal
+                        ? GasSymbols.GenerateSetNotEqual(target.PhysicalRegister)
+                        : GasSymbols.GenerateSetEqual(target.PhysicalRegister));
+
+                if (rdiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePop(Register.RSI));
+                }
+
+                if (rsiUsed)
+                {
+                    AddInstruction(GasSymbols.GeneratePop(Register.RDI));
+                }
+
+                return;
+            }
+
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+            SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+
+            AddInstruction(
+                equal
+                    ? GasSymbols.GenerateSetEqual(target.PhysicalRegister)
+                    : GasSymbols.GenerateSetNotEqual(target.PhysicalRegister));
+        }
     }
-
-    // private void GenerateOr(Term left, Term right, RegisterTerm target) =>
-    //     GenerateBinaryBoolOp(
-    //         left,
-    //         right,
-    //         target,
-    //         GasSymbols.GenerateOr,
-    //         GasSymbols.GenerateOr);
-    //
-    // private void GenerateAnd(Term left, Term right, RegisterTerm target) =>
-    //     GenerateBinaryBoolOp(
-    //         left,
-    //         right,
-    //         target,
-    //         GasSymbols.GenerateAnd,
-    //         GasSymbols.GenerateAnd);
-    //
-    // private void GenerateBinaryBoolOp(
-    //     Term left,
-    //     Term right,
-    //     RegisterTerm target,
-    //     Func<Register, Register, string> registerFunc,
-    //     Func<Register, int, string> registerValueFunc)
-    // {
-    //     var leftRegister = left as RegisterTerm;
-    //     var rightRegister = right as RegisterTerm;
-    //     var leftBool = left as ConstantBoolTerm;
-    //     var rightBool = right as ConstantBoolTerm;
-    //     var leftRegisterOffset =
-    //         leftRegister != null ? _registerOffsetMap.GetValueOrDefault(leftRegister.Name) : 0;
-    //     var rightRegisterOffset =
-    //         rightRegister != null ? _registerOffsetMap.GetValueOrDefault(rightRegister.Name) : 0;
-    //     var targetRegisterOffset = _registerOffsetMap.GetValueOrDefault(target.Name);
-    //
-    //     if (leftRegister != null && rightRegister != null)
-    //     {
-    //         AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.AL));
-    //         AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.DIL));
-    //         AddInstruction(registerFunc(Register.AL, Register.DIL));
-    //         AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-    //
-    //         return;
-    //     }
-    //
-    //     if (leftRegister != null)
-    //     {
-    //         AddInstruction(GasSymbols.GenerateMovFromOffset(leftRegisterOffset, Register.AL));
-    //         AddInstruction(registerValueFunc(Register.AL, Convert.ToInt32(rightBool.Value)));
-    //         AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-    //
-    //         return;
-    //     }
-    //
-    //     if (rightRegister != null)
-    //     {
-    //         AddInstruction(GasSymbols.GenerateMovFromOffset(rightRegisterOffset, Register.AL));
-    //         AddInstruction(registerValueFunc(Register.AL, Convert.ToInt32(leftBool.Value)));
-    //         AddInstruction(GasSymbols.GenerateSetNotEqualToOffset(targetRegisterOffset));
-    //     }
-    // }
 
     private void GenerateRelOp(
         Term left,
@@ -1737,6 +2114,8 @@ public class IntermediateToX86Compiler
         var rightRegister = right as RegisterTerm;
         var leftInt = left as ConstantIntTerm;
         var rightInt = right as ConstantIntTerm;
+        var leftFieldAccess = left as FieldAccessTerm;
+        var rightFieldAccess = right as FieldAccessTerm;
 
         if (leftRegister != null && rightRegister != null)
         {
@@ -1748,7 +2127,16 @@ public class IntermediateToX86Compiler
 
         if (leftRegister != null)
         {
-            AddInstruction(GasSymbols.GenerateCmp(leftRegister.PhysicalRegister, rightInt.Value));
+            if (rightFieldAccess != null)
+            {
+                SaveFieldAccessToRegister(rightFieldAccess, Register.RAX, true);
+                AddInstruction(GasSymbols.GenerateCmp(leftRegister.PhysicalRegister, Register.RAX));
+            }
+            else
+            {
+                AddInstruction(GasSymbols.GenerateCmp(leftRegister.PhysicalRegister, rightInt.Value));
+            }
+
             AddInstruction(generate(target.PhysicalRegister));
 
             return;
@@ -1756,33 +2144,75 @@ public class IntermediateToX86Compiler
 
         if (rightRegister != null)
         {
-            AddInstruction(GasSymbols.GenerateCmp(rightRegister.PhysicalRegister, leftInt.Value));
+            if (leftFieldAccess != null)
+            {
+                SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+                AddInstruction(GasSymbols.GenerateCmp(rightRegister.PhysicalRegister, Register.RAX));
+            }
+            else
+            {
+                AddInstruction(GasSymbols.GenerateCmp(rightRegister.PhysicalRegister, leftInt.Value));
+            }
+
             AddInstruction(generateReverse(target.PhysicalRegister));
+
+            return;
         }
+
+        if (leftInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(leftInt.Value, Register.RAX));
+        }
+
+        if (rightInt != null)
+        {
+            AddInstruction(GasSymbols.GenerateMov(rightInt.Value, target.PhysicalRegister));
+        }
+
+        if (leftFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(leftFieldAccess, Register.RAX, true);
+        }
+
+        if (rightFieldAccess != null)
+        {
+            SaveFieldAccessToRegister(rightFieldAccess, target.PhysicalRegister, true);
+        }
+
+        AddInstruction(GasSymbols.GenerateCmp(Register.RAX, target.PhysicalRegister));
+        AddInstruction(generate(target.PhysicalRegister));
     }
 
     private void GenerateNegate(Term term, RegisterTerm target)
     {
-        if (term is not RegisterTerm registerTerm)
+        if (term is RegisterTerm registerTerm)
         {
-            return;
+            AddInstruction(GasSymbols.GenerateMov(registerTerm.PhysicalRegister, Register.RAX));
+            AddInstruction(GasSymbols.GenerateNegation(Register.RAX));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
         }
-
-        AddInstruction(GasSymbols.GenerateMov(registerTerm.PhysicalRegister, Register.RAX));
-        AddInstruction(GasSymbols.GenerateNegation(Register.RAX));
-        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+        else if (term is FieldAccessTerm fat)
+        {
+            SaveFieldAccessToRegister(fat, Register.RAX, true);
+            AddInstruction(GasSymbols.GenerateNegation(Register.RAX));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+        }
     }
 
     private void GenerateNot(Term term, RegisterTerm target)
     {
-        if (term is not RegisterTerm registerTerm)
+        if (term is RegisterTerm registerTerm)
         {
-            return;
+            AddInstruction(GasSymbols.GenerateMov(registerTerm.PhysicalRegister, Register.RAX));
+            AddInstruction(GasSymbols.GenerateNot(Register.RAX));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
         }
-
-        AddInstruction(GasSymbols.GenerateMov(registerTerm.PhysicalRegister, Register.RAX));
-        AddInstruction(GasSymbols.GenerateNot(Register.RAX));
-        AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+        else if (term is FieldAccessTerm fat)
+        {
+            SaveFieldAccessToRegister(fat, Register.RAX, true);
+            AddInstruction(GasSymbols.GenerateNot(Register.RAX));
+            AddInstruction(GasSymbols.GenerateMov(Register.RAX, target.PhysicalRegister));
+        }
     }
 
     private void AddInstruction(string instruction) => _result.Add(instruction);
@@ -1790,7 +2220,7 @@ public class IntermediateToX86Compiler
     private List<string> AddStringLiteral(string literal)
     {
         var result = new List<string>();
-        
+
         if (_literalsMap.ContainsKey(literal))
         {
             return result;
@@ -1807,7 +2237,7 @@ public class IntermediateToX86Compiler
     private List<string> AddFnProlog()
     {
         var result = new List<string>();
-        
+
         result.Add(GasSymbols.GeneratePush(Register.RBP));
         result.Add(GasSymbols.GenerateMov(Register.RSP, Register.RBP));
 
@@ -1817,7 +2247,7 @@ public class IntermediateToX86Compiler
         {
             result.Add(GasSymbols.GeneratePush(registerToSave));
         }
-        
+
         // AddInstruction(GasSymbols.GeneratePush(Register.RBX));
         // AddInstruction(GasSymbols.GeneratePush(Register.R12));
         // AddInstruction(GasSymbols.GeneratePush(Register.R13));
@@ -1829,18 +2259,18 @@ public class IntermediateToX86Compiler
 
     private void AddFnEpilog()
     {
-        if (_pushes * 8 + _minusOffset > 0)
+        if ((_pushes * 8) + _minusOffset > 0)
         {
-            AddInstruction(GasSymbols.GenerateAdd(Register.RSP, _pushes * 8 + _minusOffset));
+            AddInstruction(GasSymbols.GenerateAdd(Register.RSP, (_pushes * 8) + _minusOffset));
         }
-        
+
         var registersUsedToSave = _prevRegistersUsed.Intersect(GasSymbols.PreservedRegisters).Reverse();
-        
+
         foreach (var registerToSave in registersUsedToSave)
         {
             AddInstruction(GasSymbols.GeneratePop(registerToSave));
         }
-        
+
         // AddInstruction(GasSymbols.GeneratePop(Register.R15));
         // AddInstruction(GasSymbols.GeneratePop(Register.R14));
         // AddInstruction(GasSymbols.GeneratePop(Register.R13));
@@ -1859,7 +2289,7 @@ public class IntermediateToX86Compiler
         {
             var x = _physicalRegistersStack.Pop();
             var copy = new List<Register>();
-            
+
             while (_marked[x])
             {
                 copy.Add(x);
@@ -1937,68 +2367,71 @@ public class IntermediateToX86Compiler
 
     private void SaveFieldAccessToRegister(FieldAccessTerm fat, Register targetRegister, bool saveValue = false)
     {
-            var register = fat.InstanceRegister;
-            var x = fat.InnerFieldAccess;
-            var first = true;
-            ClassSymbol currentClass = null;
+        var register = fat.InstanceRegister;
+        var x = fat.InnerFieldAccess;
+        var first = true;
+        ClassSymbol currentClass = null;
 
-            while (x != null)
+        while (x != null)
+        {
+            if (first)
             {
-                if (first)
+                if (x.InnerFieldAccess == null && !saveValue)
                 {
-                    if (x.InnerFieldAccess == null && !saveValue)
-                    {
-                        AddInstruction(GasSymbols.GenerateLeaFromMemory(
-                            register.PhysicalRegister, 
-                            fat.ClassSymbol.GetFieldOffset(x.ClassField), 
+                    AddInstruction(
+                        GasSymbols.GenerateLeaFromMemory(
+                            register.PhysicalRegister,
+                            fat.ClassSymbol.GetFieldOffset(x.ClassField),
                             targetRegister));
-                    }
-                    else
-                    {
-                        AddInstruction(GasSymbols.GenerateMovFromMemory(
-                            register.PhysicalRegister, 
-                            fat.ClassSymbol.GetFieldOffset(x.ClassField), 
-                            targetRegister));
-                    }
-
-                    var fieldSymbol = fat.ClassSymbol.Fields.FirstOrDefault(y => y.Name == x.ClassField);
-                    var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
-
-                    if (!isBasicType)
-                    {
-                        currentClass = _classes.FirstOrDefault(y => y.Name == fieldSymbol.LatteType);
-                    }
-
-                    first = false;
                 }
                 else
                 {
-                    if (x.InnerFieldAccess == null && !saveValue)
-                    {
-                        AddInstruction(
-                            GasSymbols.GenerateLeaFromMemory(
-                                targetRegister,
-                                currentClass.GetFieldOffset(x.ClassField),
-                                targetRegister));
-                    }
-                    else
-                    {
-                        AddInstruction(GasSymbols.GenerateMovFromMemory(
+                    AddInstruction(
+                        GasSymbols.GenerateMovFromMemory(
+                            register.PhysicalRegister,
+                            fat.ClassSymbol.GetFieldOffset(x.ClassField),
+                            targetRegister));
+                }
+
+                var fieldSymbol = fat.ClassSymbol.Fields.FirstOrDefault(y => y.Name == x.ClassField);
+                var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
+
+                if (!isBasicType)
+                {
+                    currentClass = _classes.FirstOrDefault(y => y.Name == fieldSymbol.LatteType);
+                }
+
+                first = false;
+            }
+            else
+            {
+                if (x.InnerFieldAccess == null && !saveValue)
+                {
+                    AddInstruction(
+                        GasSymbols.GenerateLeaFromMemory(
                             targetRegister,
                             currentClass.GetFieldOffset(x.ClassField),
                             targetRegister));
-                    } 
-                    
-                    var fieldSymbol = currentClass.Fields.FirstOrDefault(y => y.Name == x.ClassField);
-                    var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
-
-                    if (!isBasicType)
-                    {
-                        currentClass = _classes.FirstOrDefault(y => y.Name == fieldSymbol.LatteType);
-                    }
+                }
+                else
+                {
+                    AddInstruction(
+                        GasSymbols.GenerateMovFromMemory(
+                            targetRegister,
+                            currentClass.GetFieldOffset(x.ClassField),
+                            targetRegister));
                 }
 
-                x = x.InnerFieldAccess;
+                var fieldSymbol = currentClass.Fields.FirstOrDefault(y => y.Name == x.ClassField);
+                var isBasicType = TypesHelper.IsBasicType(fieldSymbol.LatteType);
+
+                if (!isBasicType)
+                {
+                    currentClass = _classes.FirstOrDefault(y => y.Name == fieldSymbol.LatteType);
+                }
             }
+
+            x = x.InnerFieldAccess;
+        }
     }
 }

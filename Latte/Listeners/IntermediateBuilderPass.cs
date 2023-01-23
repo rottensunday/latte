@@ -674,7 +674,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         // var register = _currentFunction.GetNextRegister(_types.Get(context));
         // register.MemoryAddress = true;
         var fieldAccess = new FieldAccess();
-        var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister);
+        var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister, _types.Get(context));
         // var instruction = new IntermediateInstruction(
         //     register,
         //     fieldAccessTerm,
@@ -771,7 +771,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         // var register = _currentFunction.GetNextRegister(_types.Get(context));
         // register.MemoryAddress = true;
         var fieldAccess = new FieldAccess();
-        var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister);
+        var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister, _types.Get(context));
         // var instruction = new IntermediateInstruction(
         //     register,
         //     fieldAccessTerm,
@@ -1147,7 +1147,7 @@ public class IntermediateBuilderPass : LatteBaseListener
             LatteType.Boolean => new ConstantBoolTerm(false),
             LatteType.Int => new ConstantIntTerm(0),
             LatteType.String => new ConstantStringTerm(""),
-            _ => new ConstantNullTerm()
+            _ => new ConstantNullTerm(type)
         };
 
         _currentFunction.Instructions.Add(
@@ -1219,6 +1219,12 @@ public class IntermediateBuilderPass : LatteBaseListener
         _toJumpAfterLabels.Put(context.expr(), exitElseLabel);
 
         _toHandleCond.Put(context.stmt(), exitLabel);
+    }
+
+    public override void ExitENull(LatteParser.ENullContext context)
+    {
+        var type = _types.Get(context);
+        _termsStack.Push(new ConstantNullTerm(type));
     }
 
     public override void ExitENew(LatteParser.ENewContext context)

@@ -114,7 +114,7 @@ public static class GasSymbols
     {
         Register.RDI,
         Register.RCX,
-        Register.R8,
+        // Register.R8,
         Register.R9,
         Register.R10,
         Register.R11,
@@ -214,11 +214,13 @@ public static class GasSymbols
     public static string GenerateDecrementToOffset(int offset) => $"DEC QWORD PTR [RBP{BuildOffsetString(offset)}]";
 
     public static string GenerateNegation(Register register) => $"NEG {register}";
+    
+    // public static string GenerateNegationAddress(Register register) => $"NEG QWORD PTR [{register}]";
 
     public static string GenerateNegationToOffset(int offset) => $"NEG QWORD PTR [RBP{BuildOffsetString(offset)}]";
 
     public static string GenerateNot(Register register) => $"XOR {register}, 1";
-
+    
     public static string GenerateNotToOffset(int offset) => $"XOR QWORD PTR [RBP{BuildOffsetString(offset)}], 1";
 
     public static string GenerateSubtract(Register left, Register right) => $"SUB {left}, {right}";
@@ -242,14 +244,14 @@ public static class GasSymbols
         return result;
     }
 
-    public static string GenerateDivide(Register left, int right)
+    public static string GenerateDivide(Register left, int right, Register help)
     {
         var result = $"MOV RAX, {left}\n";
         result += "CQO \n";
-        result += "PUSH RDI\n";
-        result += $"{GenerateMov(right, Register.RDI)}\n";
-        result += $"IDIV RDI\n";
-        result += "POP RDI";
+        // result += "PUSH RDI\n";
+        result += $"{GenerateMov(right, help)}\n";
+        result += $"IDIV {help}\n";
+        // result += "POP RDI";
 
         return result;
     }
