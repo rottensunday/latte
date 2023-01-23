@@ -1,16 +1,57 @@
-int main() {
-        printInt(ifac(10));
-        return 0 ;
+class test {
+    int x;
+    int y;
+    string s;
+    test z;
 }
 
-int ifac(int n) { return ifac2f(1,n); }
+class withBool {
+    boolean success;
+    boolean failure;
+}
 
-int ifac2f(int l, int h) {
-        if (l == h)
-          return l;
-        if (l > h)
-          return 1;
-        int m;
-        m = (l + h) / 2;
-        return ifac2f(l,m) * ifac2f(m+1,h);
+int main () {
+  test x = new test;
+  x.y = 15;
+  x.x = 23;
+  x.z = new test;
+  x.z.x = 11;
+  x.z.y = 333;
+  
+  printInt(x.x);
+  printInt(x.y);
+  printInt(x.z.x);
+  
+  int ret = testfun1(x.z);
+  
+  printInt(ret);
+  x.s = "haha";
+  printString(x.s + "uuu");
+  x.s = x.s + "XDDD";
+  printString(x.s);
+  
+  withBool r1 = new withBool;
+  r1.success = true;
+  r1.failure = false;
+  
+  if (r1.success || r1.failure) {
+    printInt(122);
+    x.y++;
+    printInt(x.y);
+    int z = x.y + x.x;
+    printInt(z);
+    x.x = testfun1(x);
+    
+    printInt(x.x);
+  }
+  
+
+  
+  return 0;
+}
+
+int testfun1(test x) {
+    printInt(x.y);
+    
+    return x.x;
 }

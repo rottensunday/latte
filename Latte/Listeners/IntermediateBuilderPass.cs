@@ -204,14 +204,17 @@ public class IntermediateBuilderPass : LatteBaseListener
         } 
         else if (context.lhs() is LatteParser.FieldAccessLHSContext fieldAccessLhsContext)
         {
-            var addressRegister = _termsStack.Pop();
+            var fieldAccess = _termsStack.Pop();
 
-            if (addressRegister is RegisterTerm registerTerm)
+            if (fieldAccess is FieldAccessTerm fieldAccessTerm)
             {
+                var register = _currentFunction.GetNextRegister(LatteType.Int);
+                register.FieldAccessTerm = fieldAccessTerm;
+                
                 _currentFunction.Instructions.Add(
                     new IntermediateInstruction(
-                        registerTerm,
-                        registerTerm,
+                        register,
+                        fieldAccessTerm,
                         InstructionType.Increment,
                         null,
                         _currentBlock));
@@ -646,7 +649,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         _termsStack.Push(term);
     }
 
-    public override void ExitEFieldAccessRHS(LatteParser.EFieldAccessRHSContext context)
+    public override void EnterEFieldAccessRHS(LatteParser.EFieldAccessRHSContext context)
     {
         var name = context.ID().GetText();
         var symbol = _currentScope.Resolve(name);
@@ -668,22 +671,50 @@ public class IntermediateBuilderPass : LatteBaseListener
             throw new Exception("Register for instance not found");
         }
 
-        var register = _currentFunction.GetNextRegister(_types.Get(context));
+        // var register = _currentFunction.GetNextRegister(_types.Get(context));
         // register.MemoryAddress = true;
         var fieldAccess = new FieldAccess();
         var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister);
-        var instruction = new IntermediateInstruction(
-            register,
-            fieldAccessTerm,
-            InstructionType.RhsFieldAccess,
-            null,
-            _currentBlock);
-        
-        _currentFunction.Instructions.Add(instruction);
+        // var instruction = new IntermediateInstruction(
+        //     register,
+        //     fieldAccessTerm,
+        //     InstructionType.RhsFieldAccess,
+        //     null,
+        //     _currentBlock);
+        //
+        // _currentFunction.Instructions.Add(instruction);
 
         VisitInnerFieldAccess(context.fieldAccess(), cs, fieldAccess);
         
-        _termsStack.Push(register);
+        if (_isAndOperand.Get(context))
+        {
+            _currentFunction.Instructions.Add(
+                new IfIntermediateInstruction(
+                    fieldAccessTerm,
+                    _toJumpAfterLabels.Get(context),
+                    _currentBlock,
+                    negate: _negateContext.Get(context) == false));
+            
+            _termsStack.Push(fieldAccessTerm);
+
+            return;
+        }
+
+        if (_isOrOperand.Get(context))
+        {
+            _currentFunction.Instructions.Add(
+                new IfIntermediateInstruction(
+                    fieldAccessTerm,
+                    _toJumpBodyLabels.Get(context),
+                    _currentBlock,
+                    negate: _negateContext.Get(context)));
+            
+            _termsStack.Push(fieldAccessTerm);
+
+            return;
+        }
+
+        _termsStack.Push(fieldAccessTerm);
         
         // var identifierType = _types.Get(context);
         // var lhs = context.ID().Symbol.Text;
@@ -737,22 +768,22 @@ public class IntermediateBuilderPass : LatteBaseListener
             throw new Exception("Register for instance not found");
         }
 
-        var register = _currentFunction.GetNextRegister(_types.Get(context));
-        register.MemoryAddress = true;
+        // var register = _currentFunction.GetNextRegister(_types.Get(context));
+        // register.MemoryAddress = true;
         var fieldAccess = new FieldAccess();
         var fieldAccessTerm = new FieldAccessTerm(cs, name, fieldAccess, classInstanceRegister);
-        var instruction = new IntermediateInstruction(
-            register,
-            fieldAccessTerm,
-            InstructionType.LhsFieldAccess,
-            null,
-            _currentBlock);
+        // var instruction = new IntermediateInstruction(
+        //     register,
+        //     fieldAccessTerm,
+        //     InstructionType.LhsFieldAccess,
+        //     null,
+        //     _currentBlock);
         
-        _currentFunction.Instructions.Add(instruction);
+        // _currentFunction.Instructions.Add(instruction);
 
         VisitInnerFieldAccess(context.fieldAccess(), cs, fieldAccess);
         
-        _termsStack.Push(register);
+        _termsStack.Push(fieldAccessTerm);
     }
     
     private void VisitInnerFieldAccess(
@@ -1056,11 +1087,15 @@ public class IntermediateBuilderPass : LatteBaseListener
             var rhs = _termsStack.Pop();
             var lhs = _termsStack.Pop();
 
-            if (lhs is RegisterTerm rt)
+            if (lhs is FieldAccessTerm rt)
             {
+                var nextRegister = _currentFunction.GetNextRegister(_types.Get(context.lhs()));
+                nextRegister.MemoryAddress = true;
+                nextRegister.FieldAccessTerm = rt;
+                
                 _currentFunction.Instructions.Add(
                     new IntermediateInstruction(
-                        rt,
+                        nextRegister,
                         rhs,
                         InstructionType.Assignment,
                         null,
@@ -1075,6 +1110,7 @@ public class IntermediateBuilderPass : LatteBaseListener
         var rhs = _termsStack.Pop();
 
         var register = _currentFunction.GetNextRegister(rhsType, context.ID().Symbol.Text, scope: _currentScope);
+        // register.FieldAccessTerm = new FieldAccessTerm(null, null, null, null);
 
         _currentFunction.Instructions.Add(
             new IntermediateInstruction(
@@ -1187,15 +1223,34 @@ public class IntermediateBuilderPass : LatteBaseListener
 
     public override void ExitENew(LatteParser.ENewContext context)
     {
-        var nextRegister = _currentFunction.GetNextRegister(_types.Get(context));
-        _currentFunction.Instructions.Add(new IntermediateInstruction(
-            nextRegister, 
-            null, 
-            InstructionType.New, 
-            null, 
-            _currentBlock));
+        // var lhs = _termsStack.Pop();
+        //
+        // if (lhs is not FieldAccessTerm rt)
+        // {
+        //     throw new Exception();
+        // }
+
+        // var nextRegister = _currentFunction.GetNextRegister(_types.Get(context));
+        // nextRegister.MemoryAddress = true;
+        // nextRegister.FieldAccessTerm = rt;
+                
+        // _currentFunction.Instructions.Add(
+        //     new IntermediateInstruction(
+        //         nextRegister,
+        //         null,
+        //         InstructionType.New,
+        //         null,
+        //         _currentBlock));
+            
+        // var nextRegister = _currentFunction.GetNextRegister(_types.Get(context));
+        // _currentFunction.Instructions.Add(new IntermediateInstruction(
+        //     nextRegister, 
+        //     null, 
+        //     InstructionType.New, 
+        //     null, 
+        //     _currentBlock));
         
-        _termsStack.Push(nextRegister);
+        _termsStack.Push(new NewTerm(_types.Get(context)));
     }
 
     public override void EnterEveryRule(ParserRuleContext context)

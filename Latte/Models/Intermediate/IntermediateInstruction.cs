@@ -28,7 +28,7 @@ public class IntermediateInstruction : BaseIntermediateInstruction
         InstructionType switch
         {
             InstructionType.And => $"{LeftHandSide} = {FirstOperand} && {SecondOperand}",
-            InstructionType.Assignment => $"{LeftHandSide} = {FirstOperand}",
+            InstructionType.Assignment => FirstOperand is NewTerm nt ? $"{LeftHandSide} = new {nt.LatteType}" : $"{LeftHandSide} = {FirstOperand}",
             InstructionType.Decrement => $"{LeftHandSide}--",
             InstructionType.Divide => $"{LeftHandSide} = {FirstOperand} / {SecondOperand}",
             InstructionType.Greater => $"{LeftHandSide} = {FirstOperand} > {SecondOperand}",
@@ -51,7 +51,8 @@ public class IntermediateInstruction : BaseIntermediateInstruction
             InstructionType.Jump => $"jmp {FirstOperand}",
             InstructionType.New => $"{LeftHandSide} = new {LeftHandSide.Type}",
             InstructionType.Null => $"",
-            // InstructionType.FieldAccess => $"{LeftHandSide} = {FirstOperand}",
+            InstructionType.LhsFieldAccess => $"{LeftHandSide} = {FirstOperand}",
+            InstructionType.RhsFieldAccess => $"{LeftHandSide} = {FirstOperand}",
             InstructionType.None => FirstOperand.ToString()
         } + $"  block {Block}" + $"      {InBoolExpr}";
 
@@ -76,6 +77,11 @@ public class IntermediateInstruction : BaseIntermediateInstruction
     public override RegisterTerm GetTarget() => LeftHandSide;
     public override void SwitchRegisters(string used, string newRegister)
     {
+        if (LeftHandSide?.FieldAccessTerm != null)
+        {
+            LeftHandSide.SwitchRegisters(used, newRegister);
+        }
+        
         if (FirstOperand != null)
         {
             FirstOperand.SwitchRegisters(used, newRegister);

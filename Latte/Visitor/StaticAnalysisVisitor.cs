@@ -247,30 +247,39 @@ public class StaticAnalysisVisitor : LatteBaseVisitor<CompilationResult>
             var name = lhsContext.ID().GetText();
             var symbol = _currentScope.Resolve(name);
 
-            switch (symbol)
+            if (_types.Get(lhsContext) != LatteType.Int)
             {
-                case null:
-                    _errors.Add(
-                        new CompilationError(
-                            CompilationErrorType.UndefinedReference,
-                            lhsContext.ID().Symbol,
-                            $"{name} not found"));
-                    break;
-                case FunctionSymbol:
-                    _errors.Add(
-                        new CompilationError(
-                            CompilationErrorType.NotAVariable,
-                            lhsContext.ID().Symbol,
-                            $"{name} is a function"));
-                    break;
-                case VariableSymbol x when x.LatteType != LatteType.Int:
-                    _errors.Add(
-                        new CompilationError(
-                            CompilationErrorType.TypeMismatch,
-                            lhsContext.ID().Symbol,
-                            $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
-                    break;
+                _errors.Add(
+                    new CompilationError(
+                        CompilationErrorType.TypeMismatch,
+                        lhsContext.ID().Symbol,
+                        $"Expected identifier of type {LatteType.Int}, found: {_types.Get(lhsContext)}"));
             }
+
+            // switch (_types.Get(lhsContext))
+            // {
+            //     case null:
+            //         _errors.Add(
+            //             new CompilationError(
+            //                 CompilationErrorType.UndefinedReference,
+            //                 lhsContext.ID().Symbol,
+            //                 $"{name} not found"));
+            //         break;
+            //     case FunctionSymbol:
+            //         _errors.Add(
+            //             new CompilationError(
+            //                 CompilationErrorType.NotAVariable,
+            //                 lhsContext.ID().Symbol,
+            //                 $"{name} is a function"));
+            //         break;
+            //     case VariableSymbol x when x.LatteType != LatteType.Int:
+            //         _errors.Add(
+            //             new CompilationError(
+            //                 CompilationErrorType.TypeMismatch,
+            //                 lhsContext.ID().Symbol,
+            //                 $"Expected identifier of type {LatteType.Int}, found: {x.LatteType}"));
+            //         break;
+            // }
 
             var result = VisitChildren(context);
 

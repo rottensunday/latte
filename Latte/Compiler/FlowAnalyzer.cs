@@ -43,29 +43,10 @@ public class FlowAnalyzer
         var vrCounter = 0;
         var vrName = $"v{vrCounter}";
 
-        var registersInFunctions = instructions
-            .OfType<IntermediateInstruction>()
-            .Where(x => x.FirstOperand is FunctionCallTerm)
-            .SelectMany(x => (x.FirstOperand as FunctionCallTerm).Arguments.OfType<RegisterTerm>())
-            .Where(x => x != null);
-
         var registersUsed = instructions
-            // .Where(x => x.LeftHandSide != null || x is FunctionCallTerm)
-            .OfType<IntermediateInstruction>()
-            .SelectMany(
-                x => new[]
-                {
-                    x.LeftHandSide, x.FirstOperand as RegisterTerm, x.SecondOperand as RegisterTerm,
-                    (x.FirstOperand as FieldAccessTerm)?.InstanceRegister
-                })
+            .SelectMany(x => x.GetOperands())
+            .Concat(instructions.Select(x => x.GetTarget()))
             .Where(x => x != null)
-            .Concat(registersInFunctions)
-            .Concat(
-                instructions
-                    .OfType<IfIntermediateInstruction>()
-                    .Select(x => x.Condition)
-                    .OfType<RegisterTerm>()
-                    .Where(x => x != null))
             .DistinctBy(x => x.Name);
 
         var srToVr = new Dictionary<string, string>();
@@ -106,6 +87,32 @@ public class FlowAnalyzer
                         registerTerm.NextUse = prevUse[registerTerm.Name];
                         prevUse[registerTerm.Name] = index;
                     }
+
+                    if (ifInstruction.Condition is FieldAccessTerm fat)
+                    {
+                        var register = fat.InstanceRegister;
+
+                        if (srToVr[register.Name] == null)
+                        {
+                            srToVr[register.Name] = vrName;
+                            UpdateVr(ref vrCounter, ref vrName);
+                        }
+
+                        register.VirtualRegister = srToVr[register.Name];
+                        register.NextUse = prevUse[register.Name];
+                        prevUse[register.Name] = index;
+                    
+                        // if (srToVr[instruction.LeftHandSide.Name] == null)
+                        // {
+                        //     srToVr[instruction.LeftHandSide.Name] = vrName;
+                        //     UpdateVr(ref vrCounter, ref vrName);
+                        // }
+                        //
+                        // instruction.LeftHandSide.VirtualRegister = srToVr[instruction.LeftHandSide.Name];
+                        // instruction.LeftHandSide.NextUse = prevUse[instruction.LeftHandSide.Name];
+                        // prevUse[instruction.LeftHandSide.Name] = -1;
+                        // srToVr[instruction.LeftHandSide.Name] = null;
+                    }
                 }
             }
             else
@@ -115,6 +122,21 @@ public class FlowAnalyzer
                 // for each operand, O, that OP defines do
                 if (instruction.LeftHandSide != null)
                 {
+                    if (instruction.LeftHandSide.FieldAccessTerm != null)
+                    {
+                        var register = instruction.LeftHandSide.FieldAccessTerm.InstanceRegister;
+
+                        if (srToVr[register.Name] == null)
+                        {
+                            srToVr[register.Name] = vrName;
+                            UpdateVr(ref vrCounter, ref vrName);
+                        }
+
+                        register.VirtualRegister = srToVr[register.Name];
+                        register.NextUse = prevUse[register.Name];
+                        prevUse[register.Name] = index;
+                    }
+                    
                     if (srToVr[instruction.LeftHandSide.Name] == null)
                     {
                         srToVr[instruction.LeftHandSide.Name] = vrName;
@@ -128,6 +150,9 @@ public class FlowAnalyzer
                 }
 
                 // for each operand, O, that OP uses do
+                
+                
+                
                 if (instruction.FirstOperand is FunctionCallTerm functionCallTerm)
                 {
                     foreach (var argRegister in functionCallTerm.GetUsedRegisters())
@@ -184,6 +209,21 @@ public class FlowAnalyzer
                     secondOperand.NextUse = prevUse[secondOperand.Name];
                     prevUse[secondOperand.Name] = index;
                 }
+                
+                if (instruction.SecondOperand is FieldAccessTerm fieldAccessTerm2)
+                {
+                    var register = fieldAccessTerm2.InstanceRegister;
+
+                    if (srToVr[register.Name] == null || instruction.FirstOperand is FieldAccessTerm)
+                    {
+                        srToVr[register.Name] = vrName;
+                        UpdateVr(ref vrCounter, ref vrName);
+                    }
+
+                    register.VirtualRegister = srToVr[register.Name];
+                    register.NextUse = prevUse[register.Name];
+                    prevUse[register.Name] = index;
+                }
             }
 
             index--;
@@ -208,7 +248,7 @@ public class FlowAnalyzer
                 {
                     if (instructions[i] is IntermediateInstruction
                         {
-                            InstructionType: InstructionType.Assignment, FirstOperand: RegisterTerm rt
+                            InstructionType: InstructionType.Assignment, FirstOperand: RegisterTerm rt, LeftHandSide.FieldAccessTerm: null
                         } intermediate)
                     {
                         var leftRegister = intermediate.LeftHandSide;
@@ -308,7 +348,7 @@ public class FlowAnalyzer
             InstructionType.NotEqual,
             InstructionType.NegateBool,
             InstructionType.NegateInt,
-            InstructionType.Assignment
+            // InstructionType.Assignment
         };
 
         foreach (var instructions in blocks.Select(x => x.Instructions))
@@ -318,7 +358,7 @@ public class FlowAnalyzer
 
             foreach (var instruction in instructions
                          .OfType<IntermediateInstruction>()
-                         .Where(x => acceptedInstructions.Contains(x.InstructionType)))
+                         .Where(x => acceptedInstructions.Contains(x.InstructionType) && x.LeftHandSide.FieldAccessTerm == null))
             {
                 var firstOperandStr = instruction.FirstOperand.ToString();
                 var secondOperandStr = instruction.SecondOperand?.ToString();
@@ -559,10 +599,19 @@ public class FlowAnalyzer
         {
             if (instruction.LeftHandSide != null)
             {
+                FieldAccessTerm accessTerm = null;
+
+                if (instruction.LeftHandSide.FieldAccessTerm != null)
+                {
+                    accessTerm = instruction.LeftHandSide.FieldAccessTerm;
+                    accessTerm = new FieldAccessTerm(accessTerm.ClassSymbol, accessTerm.InstanceName, accessTerm.InnerFieldAccess, new RegisterTerm(accessTerm.InstanceRegister.Name, accessTerm.InstanceRegister.Type));
+                }
+                
                 instruction.LeftHandSide = new RegisterTerm(
                     instruction.LeftHandSide.Name,
                     instruction.LeftHandSide.Type,
-                    instruction.LeftHandSide.Identifier);
+                    instruction.LeftHandSide.Identifier,
+                    fat: accessTerm);
             }
 
             if (instruction.FirstOperand is FunctionCallTerm functionCallTerm)
@@ -579,7 +628,13 @@ public class FlowAnalyzer
                             new RegisterTerm(
                                 x.Name,
                                 x.Type,
-                                x.Identifier));
+                                x.Identifier,
+                                fat: x.FieldAccessTerm));
+                    }
+                    else if (arg is FieldAccessTerm fat)
+                    {
+                        args.Add(
+                            new FieldAccessTerm(fat.ClassSymbol, fat.InstanceName, fat.InnerFieldAccess, new RegisterTerm(fat.InstanceRegister.Name, fat.InstanceRegister.Type)));
                     }
                     else
                     {
@@ -593,7 +648,8 @@ public class FlowAnalyzer
                 instruction.FirstOperand = new RegisterTerm(
                     firstOperand.Name,
                     firstOperand.Type,
-                    firstOperand.Identifier);
+                    firstOperand.Identifier,
+                    fat: firstOperand.FieldAccessTerm);
             }
 
             if (instruction.SecondOperand is RegisterTerm secondOperand)
@@ -601,7 +657,8 @@ public class FlowAnalyzer
                 instruction.SecondOperand = new RegisterTerm(
                     secondOperand.Name,
                     secondOperand.Type,
-                    secondOperand.Identifier);
+                    secondOperand.Identifier,
+                    fat: secondOperand.FieldAccessTerm);
             }
 
             if (instruction.FirstOperand is FieldAccessTerm fieldAccessTerm)
@@ -609,7 +666,17 @@ public class FlowAnalyzer
                 fieldAccessTerm.InstanceRegister = new RegisterTerm(
                     fieldAccessTerm.InstanceRegister.Name,
                     fieldAccessTerm.InstanceRegister.Type,
-                    fieldAccessTerm.InstanceRegister.Identifier);
+                    fieldAccessTerm.InstanceRegister.Identifier,
+                    fat: fieldAccessTerm.InstanceRegister.FieldAccessTerm);
+            }
+            
+            if (instruction.SecondOperand is FieldAccessTerm fieldAccessTerm2)
+            {
+                fieldAccessTerm2.InstanceRegister = new RegisterTerm(
+                    fieldAccessTerm2.InstanceRegister.Name,
+                    fieldAccessTerm2.InstanceRegister.Type,
+                    fieldAccessTerm2.InstanceRegister.Identifier,
+                    fat: fieldAccessTerm2.InstanceRegister.FieldAccessTerm);
             }
         }
 
@@ -620,7 +687,8 @@ public class FlowAnalyzer
                 ifInstruction.Condition = new RegisterTerm(
                     registerTerm.Name,
                     registerTerm.Type,
-                    registerTerm.Identifier);
+                    registerTerm.Identifier,
+                    fat: registerTerm.FieldAccessTerm);
             }
         }
     }

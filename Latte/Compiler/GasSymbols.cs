@@ -112,27 +112,34 @@ public static class GasSymbols
 
     public static readonly List<Register> AllocationRegisters = new()
     {
-        // Register.RCX,
-        //
-        // Register.R8,
-        // Register.R9,
-        // Register.R10,
-        Register.R11,
         Register.RDI,
-        // Register.RSI,
-        // Register.RDX,
-        // Register.RBX,
-        // Register.R12,
-        // Register.R13,
-        // Register.R14,
-        // Register.R15,
+        Register.RCX,
+        Register.R8,
+        Register.R9,
+        Register.R10,
+        Register.R11,
+        Register.RSI,
+        Register.RDX,
+        Register.RBX,
+        Register.R12,
+        Register.R13,
+        Register.R14,
+        Register.R15,
     };
 
     public static string GenerateFunctionSymbol(string name) => $"_{name}:";
 
     public static string GenerateFunctionCall(string name) => $"CALL _{name}";
 
-    public static string GenerateMov(Register from, Register to) => $"MOV {to}, {from}";
+    public static string GenerateMov(Register from, Register to, bool toMemory = false)
+    {
+        if (toMemory)
+        {
+            return $"MOV [{to}], {from}";
+        }
+        
+        return $"MOV {to}, {from}";
+    }
 
     public static string GenerateMovFromMemory(Register baseRegister, int offset, Register targetRegister)
     {
@@ -143,8 +150,36 @@ public static class GasSymbols
 
         return $"MOV {targetRegister}, [{baseRegister}+{offset}]";
     }
+    
+    public static string GenerateLeaFromMemory(Register baseRegister, int offset, Register targetRegister)
+    {
+        if (offset == 0)
+        {
+            return $"LEA {targetRegister}, [{baseRegister}]";
+        }
 
-    public static string GenerateMov(int value, Register to) => $"MOV {to}, {value}";
+        return $"LEA {targetRegister}, [{baseRegister}+{offset}]";
+    }
+    
+    // public static string GenerateMovToMemory(Register source, Register target)
+    // {
+    //     return $"MOV [{target}], {source}";
+    // }
+    //
+    // public static string GenerateMovToMemory(int value, Register target)
+    // {
+    //     return $"MOV [{target}], {value}";
+    // }
+
+    public static string GenerateMov(int value, Register to, bool toMemory = false)
+    {
+        if (toMemory)
+        {
+            return $"MOV QWORD PTR [{to}], {value}";
+        }
+        
+        return $"MOV {to}, {value}";
+    }
 
     public static string GenerateLeaForLiteral(string label, Register to) => $"LEA {to}, {label}[RIP]";
 
@@ -167,10 +202,14 @@ public static class GasSymbols
     public static string GenerateLabel(string labelName) => $"{labelName}:";
 
     public static string GenerateIncrement(Register register) => $"INC {register}";
+    
+    public static string GenerateIncrementAddress(Register register) => $"INC QWORD PTR [{register}]";
 
     public static string GenerateIncrementToOffset(int offset) => $"INC QWORD PTR [RBP{BuildOffsetString(offset)}]";
 
     public static string GenerateDecrement(Register register) => $"DEC {register}";
+    
+    public static string GenerateDecrementAddress(Register register) => $"DEC QWORD PTR [{register}]";
 
     public static string GenerateDecrementToOffset(int offset) => $"DEC QWORD PTR [RBP{BuildOffsetString(offset)}]";
 

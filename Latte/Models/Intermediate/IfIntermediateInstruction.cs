@@ -36,6 +36,11 @@ public class IfIntermediateInstruction : BaseIntermediateInstruction
             return new List<RegisterTerm> { rt };
         }
 
+        if (Condition is FieldAccessTerm fat)
+        {
+            return new List<RegisterTerm> { fat.InstanceRegister };
+        }
+
         return new List<RegisterTerm>();
     }
 
